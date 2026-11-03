@@ -1,0 +1,17 @@
+{
+  "id": "batch-questions",
+  "name": "Batch knowledge answers",
+  "description": "Answer a list of questions in parallel from the knowledge base and compile a report.",
+  "inputs": [{ "name": "questions", "type": "array", "required": true, "description": "List of questions" }],
+  "nodes": [
+    { "id": "start", "type": "start", "title": "Questions", "position": { "x": 40, "y": 120 } },
+    { "id": "each", "type": "iteration", "title": "Answer each", "data": { "items": "{{inputs.questions}}", "workflow": "kb-answer", "itemName": "question", "parallel": 3 }, "position": { "x": 260, "y": 120 } },
+    { "id": "compile", "type": "code", "title": "Compile report", "data": { "inputs": { "questions": "{{inputs.questions}}", "results": "{{each.results}}" }, "code": "const lines = inputs.questions.map((q, i) => '### ' + q + '\\n' + inputs.results[i].answer);\nreturn { report: lines.join('\\n\\n'), count: lines.length };" }, "position": { "x": 480, "y": 120 } },
+    { "id": "end", "type": "end", "title": "Output", "data": { "outputs": { "report": "{{compile.report}}", "count": "{{compile.count}}" } }, "position": { "x": 700, "y": 120 } }
+  ],
+  "edges": [
+    { "source": "start", "target": "each" },
+    { "source": "each", "target": "compile" },
+    { "source": "compile", "target": "end" }
+  ]
+}

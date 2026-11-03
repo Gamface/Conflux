@@ -1,0 +1,7 @@
+node_modules/
+data/
+apps/web/dist/
+*.log
+.env
+conflux.config.json
+.DS_Store

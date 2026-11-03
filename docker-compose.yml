@@ -1,0 +1,10 @@
+services:
+  conflux:
+    build: .
+    ports: ["127.0.0.1:8787:8787"]
+    env_file: [.env]
+    volumes:
+      - conflux-data:/data
+    restart: unless-stopped
+volumes:
+  conflux-data:

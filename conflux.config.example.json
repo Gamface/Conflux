@@ -1,0 +1,48 @@
+{
+  "models": {
+    "local": { "provider": "openai", "baseUrl": "http://localhost:11434/v1", "model": "qwen3:14b" }
+  },
+  "coworkers": [
+    {
+      "id": "finance",
+      "name": "Expense Checker",
+      "emoji": "₤",
+      "color": "#16a34a",
+      "description": "Reads expense claims against the policy as written.",
+      "role": "You check expense claims against the handbook dataset. Quote the exact policy line for every finding and never approve anything yourself.",
+      "tools": ["toolset:knowledge", "toolset:spaces", "todo", "memory", "session_search"],
+      "spaces": ["finance"],
+      "policy": { "deny": ["action.effect in [\"external\", \"execute\", \"destructive\"]"] }
+    },
+    {
+      "id": "langgraph",
+      "name": "LangGraph agent (BYO)",
+      "emoji": "⛓",
+      "role": "External agent connected over AG-UI.",
+      "tools": ["toolset:web", "toolset:spaces", "memory"],
+      "agui": { "url": "http://localhost:8000/agent" }
+    }
+  ],
+  "policy": {
+    "mode": "enforce",
+    "deny": [
+      "tool.name == \"terminal\" && command.program in [\"sudo\", \"mkfs\", \"dd\", \"shutdown\"]",
+      "has(page) && has(element) && element.name.matches(\"(?i)(place order|pay now|confirm purchase|delete account)\")"
+    ],
+    "requireApproval": [
+      "action.effect == \"destructive\"",
+      "action.effect == \"external\" && initiator in [\"task\", \"schedule\"]",
+      "tool.name == \"skill_manage\" && initiator == \"review\" && args.action == \"create\""
+    ],
+    "allow": ["true"],
+    "labels": {
+      "action.effect == \"destructive\"": { "name": "Destructive actions", "description": "Deleting or overwriting things needs a person to say yes." }
+    }
+  },
+  "mcpServers": {
+    "filesystem": { "command": "npx", "args": ["-y", "@modelcontextprotocol/server-filesystem", "./data/shared"], "disabled": true }
+  },
+  "channels": {
+    "telegram": { "tokenEnv": "TELEGRAM_BOT_TOKEN", "coworker": "assistant" }
+  }
+}

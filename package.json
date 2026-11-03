@@ -1,0 +1,27 @@
+{
+  "name": "conflux",
+  "version": "0.1.0",
+  "description": "Self-hosted AI coworkers that learn, act on real computers, run workflows, and stay inside your boundaries.",
+  "type": "module",
+  "private": true,
+  "license": "MIT",
+  "engines": { "node": ">=22.18" },
+  "workspaces": ["apps/web"],
+  "bin": { "conflux": "bin/conflux.ts" },
+  "scripts": {
+    "start": "node apps/server/src/main.ts",
+    "dev": "node --watch apps/server/src/main.ts",
+    "build:web": "npm --prefix apps/web run build",
+    "dev:web": "npm --prefix apps/web run dev",
+    "cli": "node bin/conflux.ts",
+    "test": "node --test --test-concurrency=1 tests/*.test.ts",
+    "typecheck": "tsc -p ."
+  },
+  "optionalDependencies": {
+    "playwright": "^1.55.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.18.0",
+    "typescript": "^5.9.0"
+  }
+}

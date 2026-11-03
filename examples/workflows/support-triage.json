@@ -1,0 +1,30 @@
+{
+  "id": "support-triage",
+  "name": "Support ticket triage",
+  "description": "Classify a ticket, escalate urgent ones to an agent, draft a reply for the rest, and save the result as a page.",
+  "exposeAsTool": true,
+  "inputs": [
+    { "name": "ticket", "type": "string", "required": true, "description": "The customer's message" },
+    { "name": "customer", "type": "string", "default": "Customer" }
+  ],
+  "nodes": [
+    { "id": "start", "type": "start", "title": "Ticket in", "position": { "x": 40, "y": 180 } },
+    { "id": "classify", "type": "llm", "title": "Classify", "data": { "json": true, "prompt": "Classify this support ticket. Return JSON with keys category (billing|technical|general), urgency (high|low) and summary.\n\nTicket from {{inputs.customer}}:\n{{inputs.ticket}}" }, "position": { "x": 240, "y": 180 } },
+    { "id": "route", "type": "if_else", "title": "Urgent?", "data": { "cases": [{ "id": "urgent", "when": "has(classify.json.urgency) && classify.json.urgency == \"high\"" }] }, "position": { "x": 440, "y": 180 } },
+    { "id": "escalate", "type": "agent", "title": "Escalation agent", "data": { "coworker": "assistant", "prompt": "An URGENT {{classify.json.category}} ticket arrived from {{inputs.customer}}: \"{{inputs.ticket}}\". Draft a short holding reply that acknowledges the impact and promises an update within 1 hour. Reply with the draft only." }, "position": { "x": 660, "y": 90 } },
+    { "id": "standard", "type": "template", "title": "Standard reply", "data": { "template": "Hi {{inputs.customer}},\n\nThanks for reaching out about your {{classify.json.category}} question. We've logged it and will reply within one business day.\n\n— Support" }, "position": { "x": 660, "y": 270 } },
+    { "id": "pick", "type": "aggregator", "title": "Merge", "data": { "variables": ["{{escalate.text}}", "{{standard.text}}"] }, "position": { "x": 880, "y": 180 } },
+    { "id": "save", "type": "tool", "title": "Save to Space", "data": { "tool": "page_save", "args": { "title": "Ticket — {{inputs.customer}}", "body": "**Category:** {{classify.json.category}}  \n**Urgency:** {{classify.json.urgency}}\n\n> {{inputs.ticket}}\n\n### Draft reply\n{{pick.value}}" }, "onError": "continue" }, "position": { "x": 1080, "y": 180 } },
+    { "id": "end", "type": "end", "title": "Output", "data": { "outputs": { "category": "{{classify.json.category}}", "urgency": "{{classify.json.urgency}}", "reply": "{{pick.value}}", "route": "{{route.matched}}" } }, "position": { "x": 1280, "y": 180 } }
+  ],
+  "edges": [
+    { "source": "start", "target": "classify" },
+    { "source": "classify", "target": "route" },
+    { "source": "route", "target": "escalate", "sourceHandle": "urgent" },
+    { "source": "route", "target": "standard", "sourceHandle": "else" },
+    { "source": "escalate", "target": "pick" },
+    { "source": "standard", "target": "pick" },
+    { "source": "pick", "target": "save" },
+    { "source": "save", "target": "end" }
+  ]
+}

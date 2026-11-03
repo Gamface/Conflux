@@ -1,0 +1,28 @@
+{
+  "id": "kb-answer",
+  "name": "Answer from the knowledge base",
+  "description": "Retrieval-augmented answer with citations from a knowledge dataset.",
+  "exposeAsTool": true,
+  "inputs": [
+    { "name": "question", "type": "string", "required": true },
+    { "name": "dataset", "type": "string", "description": "Optional dataset to restrict retrieval to" }
+  ],
+  "nodes": [
+    { "id": "start", "type": "start", "title": "Question", "position": { "x": 40, "y": 120 } },
+    { "id": "retrieve", "type": "knowledge", "title": "Retrieve", "data": { "query": "{{inputs.question}}", "dataset": "{{inputs.dataset}}", "topK": 4 }, "position": { "x": 260, "y": 120 } },
+    { "id": "has_hits", "type": "if_else", "title": "Found anything?", "data": { "cases": [{ "id": "yes", "when": "size(retrieve.results) > 0" }] }, "position": { "x": 470, "y": 120 } },
+    { "id": "answer", "type": "llm", "title": "Answer with citations", "data": { "system": "Answer only from the passages. Cite as [n]. If the passages don't answer it, say so.", "prompt": "Question: {{inputs.question}}\n\nPassages:\n{{retrieve.text}}" }, "position": { "x": 690, "y": 60 } },
+    { "id": "none", "type": "template", "title": "No sources", "data": { "template": "I couldn't find anything in the knowledge base about: {{inputs.question}}" }, "position": { "x": 690, "y": 200 } },
+    { "id": "merge", "type": "aggregator", "title": "Merge", "data": { "variables": ["{{answer.text}}", "{{none.text}}"] }, "position": { "x": 900, "y": 120 } },
+    { "id": "end", "type": "end", "title": "Output", "data": { "outputs": { "answer": "{{merge.value}}", "sources": "{{retrieve.results}}" } }, "position": { "x": 1100, "y": 120 } }
+  ],
+  "edges": [
+    { "source": "start", "target": "retrieve" },
+    { "source": "retrieve", "target": "has_hits" },
+    { "source": "has_hits", "target": "answer", "sourceHandle": "yes" },
+    { "source": "has_hits", "target": "none", "sourceHandle": "else" },
+    { "source": "answer", "target": "merge" },
+    { "source": "none", "target": "merge" },
+    { "source": "merge", "target": "end" }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "id": "summarize-url",
+  "name": "Summarize a web page",
+  "description": "Fetch a URL and return a short summary with key points.",
+  "exposeAsTool": true,
+  "inputs": [{ "name": "url", "type": "string", "required": true, "description": "Page to summarize" }],
+  "nodes": [
+    { "id": "start", "type": "start", "title": "Start", "position": { "x": 40, "y": 120 } },
+    { "id": "fetch", "type": "tool", "title": "Fetch page", "data": { "tool": "web_fetch", "args": { "url": "{{inputs.url}}", "max_chars": 8000 }, "retries": 1 }, "position": { "x": 260, "y": 120 } },
+    { "id": "summary", "type": "llm", "title": "Summarize", "data": { "system": "You write crisp executive summaries.", "prompt": "Summarize this page in 3 bullet points, then one line on why it matters.\n\n{{fetch.text}}" }, "position": { "x": 480, "y": 120 } },
+    { "id": "end", "type": "end", "title": "Output", "data": { "outputs": { "url": "{{inputs.url}}", "summary": "{{summary.text}}" } }, "position": { "x": 700, "y": 120 } }
+  ],
+  "edges": [
+    { "source": "start", "target": "fetch" },
+    { "source": "fetch", "target": "summary" },
+    { "source": "summary", "target": "end" }
+  ]
+}

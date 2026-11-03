@@ -1,0 +1,19 @@
+Conflux is an independent implementation. It re-implements ideas and documented
+behaviour from the following projects; no source code from them is included.
+
+- Hermes Agent — Nous Research — MIT — https://github.com/NousResearch/hermes-agent
+  (learning loop, curated memory, skills, frozen prompts, session search, cron, gateways)
+- OpenBot — CopilotKit — MIT — https://github.com/CopilotKit/OpenBot
+  (AG-UI coworkers, policy gateway semantics, audit, take-control)
+- OpenDots — CopilotKit — MIT — https://github.com/CopilotKit/OpenDots
+  (Spaces, revisioned pages, scheduled turns, per-agent MCP)
+- OpenMuse — CopilotKit — MIT — https://github.com/CopilotKit/openmuse
+  (visible tasks, plans, approvals, follow-up queue)
+- Dify — LangGenius — modified Apache 2.0 — https://github.com/langgenius/dify
+  (workflow node model and knowledge datasets, as concepts only; no Dify code,
+  frontend, logo or branding is used)
+- agent-computer-use — Kortix — MIT — https://github.com/kortix-ai/agent-computer-use
+  (accessibility-tree snapshot/ref model; Conflux invokes the agent-cu CLI if installed)
+
+Skill files follow the open agentskills.io format. AG-UI is an open protocol
+(https://docs.ag-ui.com).
