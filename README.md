@@ -51,7 +51,7 @@ export ANTHROPIC_API_KEY=…   # or OPENAI_API_KEY, OPENROUTER_API_KEY, or OLLAM
 npm start
 ```
 
-Browser automation: `npx playwright install chromium`. Desktop automation: install an `agent-cu`-compatible CLI (`npm i -g agent-cu`; the maintained successor is the Cua Driver: set `CONFLUX_DESKTOP_BIN`). Check everything with `npm run cli -- doctor`.
+Browser automation: `npx playwright install chromium`. Desktop automation (macOS, Windows, Linux): `npm i -g agent-cu`. On Windows, Conflux runs agent-cu's bundled `.exe` directly rather than the npm `.cmd` shim, so typed text never passes through a shell. Any CLI with the same verbs works via `CONFLUX_DESKTOP_BIN`. Check everything with `npm run cli -- doctor`.
 
 **Terminal:** `npm run cli -- chat` (approvals are asked inline) · `npm run cli -- run kb-answer question="How many days of leave?"`
 
@@ -116,7 +116,12 @@ This is an **alpha**. Verified by the test suite (`npm test`, 30 tests) on the o
 - tasks: leases, interruption, pause/cancel and the scheduler
 - delegation, MCP over stdio, external AG-UI agents and the HTTP API
 
-Not yet verified against live services: the real OpenAI-compatible and Anthropic streaming endpoints, Telegram, live desktop control and web-search providers.
+CI also runs on Windows, Linux and macOS, plus live jobs:
+
+- real web pages and Chromium browsing, with element-aware policy
+- **Windows desktop control:** Notepad is opened, snapshotted, typed into and read back, and a rule refuses its Close button
+
+Not yet verified against live services: the real model endpoints (the live test runs once an `ANTHROPIC_API_KEY` repo secret is added), Telegram and web-search providers.
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#roadmap) for the roadmap and known limits. The main ones:
 
