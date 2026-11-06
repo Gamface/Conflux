@@ -93,7 +93,7 @@ export const terminalTool: Tool = {
   toolset: "computer",
   effect: "execute",
   description:
-    "Run a shell command in your workspace directory (bash, 120s timeout by default). Output is truncated. Prefer non-interactive flags.",
+    `Run a shell command in your workspace directory (${process.platform === "win32" ? "PowerShell" : "bash"}, 120s timeout by default). Output is truncated. Prefer non-interactive flags.`,
   parameters: {
     type: "object",
     properties: { command: { type: "string" }, timeout_s: { type: "number" }, cwd: { type: "string", description: "Subdirectory of the workspace." } },
@@ -106,7 +106,9 @@ export const terminalTool: Tool = {
     const timeout = Math.min(Number(a.timeout_s ?? 120), 900) * 1000;
     const started = Date.now();
     const { code, out } = await new Promise<{ code: number | null; out: string }>((res) => {
-      const child = spawn("bash", ["-lc", a.command], { cwd, env: { ...process.env, CONFLUX_WORKSPACE: cwd }, signal: ctx.signal });
+      // bash on Linux/macOS; PowerShell on Windows (no bash by default there).
+      const [shell, shellArgs] = process.platform === "win32" ? ["powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", a.command]] : ["bash", ["-lc", a.command]];
+      const child = spawn(shell, shellArgs as string[], { cwd, env: { ...process.env, CONFLUX_WORKSPACE: cwd }, signal: ctx.signal, windowsHide: true });
       let out = "";
       const add = (b: Buffer) => {
         if (out.length < 200_000) out += b.toString();

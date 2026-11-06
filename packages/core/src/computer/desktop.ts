@@ -16,7 +16,7 @@ export const desktopSnapshots = new SnapshotCache();
 export function hasDesktopDriver(): boolean {
   if (present === undefined) {
     try {
-      execFileSync("which", [BIN], { stdio: "ignore" });
+      execFileSync(process.platform === "win32" ? "where" : "which", [BIN], { stdio: "ignore" });
       present = true;
     } catch {
       present = false;

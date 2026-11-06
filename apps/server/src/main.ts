@@ -1,6 +1,7 @@
 import { createServer } from "node:http";
 import { join } from "node:path";
 import { timingSafeEqual } from "node:crypto";
+import { pathToFileURL } from "node:url";
 import { Runtime, REPO_ROOT, loadConfig } from "../../../packages/core/src/index.ts";
 import { buildApi } from "./api.ts";
 import { HttpError, json, readBody, serveStatic, type Req } from "./http.ts";
@@ -72,7 +73,8 @@ export async function startServer(opts: { port?: number; host?: string; dataDir?
   return { rt, server, port, close };
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+// Compare as file URLs so this also matches on Windows (C:\… paths).
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const s = await startServer();
   const shutdown = async () => {
     await s.close();

@@ -2,7 +2,11 @@ name: ci
 on: [push, pull_request]
 jobs:
   test:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -11,3 +15,11 @@ jobs:
       - run: npx tsc -p .
       - run: npm test
       - run: npm run build:web
+      - name: Server starts
+        shell: bash
+        run: |
+          PORT=8799 CONFLUX_DATA_DIR=./ci-data node apps/server/src/main.ts & echo $! > pid
+          for i in $(seq 1 30); do curl -sf http://127.0.0.1:8799/api/health && break; sleep 1; done
+          curl -sf http://127.0.0.1:8799/api/health
+          curl -sf http://127.0.0.1:8799/ | grep -q "<div id=\"root\">"
+          kill $(cat pid) || true

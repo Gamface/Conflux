@@ -128,3 +128,14 @@ test("files: workspace paths cannot escape", async () => {
     await rt.cleanup();
   }
 });
+
+test("terminal runs a real command on this OS (bash, or PowerShell on Windows)", async () => {
+  const rt = makeRuntime();
+  try {
+    const r = await rt.gateway.execute("terminal", { command: "echo conflux-ok" }, ctxFor(rt));
+    assert.equal(r.isError, false, r.content);
+    assert.match(r.content, /exit 0[\s\S]*conflux-ok/);
+  } finally {
+    await rt.cleanup();
+  }
+});
