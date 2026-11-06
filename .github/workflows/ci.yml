@@ -23,3 +23,16 @@ jobs:
           curl -sf http://127.0.0.1:8799/api/health
           curl -sf http://127.0.0.1:8799/ | grep -q "<div id=\"root\">"
           kill $(cat pid) || true
+
+  live:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: npm install --no-audit --no-fund
+      - run: npx playwright install --with-deps chromium
+      - run: node --test --test-concurrency=1 tests/live.test.ts
+        env:
+          CONFLUX_LIVE: "1"
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
