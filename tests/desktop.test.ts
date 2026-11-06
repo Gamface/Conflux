@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { join } from "node:path";
+import { win32 } from "node:path";
+const join = win32.join;
 import { resolveDriver, type ResolveEnv } from "../packages/core/src/computer/driver.ts";
 import { parseSnapshot } from "../packages/core/src/computer/snapshot.ts";
 import { desktopDriver } from "../packages/core/src/index.ts";
@@ -28,9 +29,9 @@ test("driver: shim on PATH without bundled exe falls back to `node agent-cu.js` 
 });
 
 test("driver: a native agent-cu.exe on PATH (cargo install) is used directly; .cmd is never returned", () => {
-  const d = resolveDriver(fakeEnv(["C:/cargo/bin/agent-cu.exe", "C:/npm/agent-cu.cmd"], { env: { PATH: "C:/npm;C:/cargo/bin", PATHEXT: ".EXE;.CMD" } }));
-  assert.equal(d?.file, "C:/cargo/bin/agent-cu.exe");
-  const none = resolveDriver(fakeEnv(["C:/npm/agent-cu.cmd"], { env: { PATH: "C:/npm", PATHEXT: ".EXE;.CMD" } }));
+  const d = resolveDriver(fakeEnv([win32.join("C:/cargo/bin", "agent-cu.exe"), win32.join("C:/npm", "agent-cu.cmd")], { env: { PATH: "C:/npm;C:/cargo/bin", PATHEXT: ".EXE;.CMD" } }));
+  assert.equal(d?.file, win32.join("C:/cargo/bin", "agent-cu.exe"));
+  const none = resolveDriver(fakeEnv([win32.join("C:/npm", "agent-cu.cmd")], { env: { PATH: "C:/npm", PATHEXT: ".EXE;.CMD" } }));
   assert.equal(none, undefined, "a bare shim with no package behind it is not runnable");
 });
 

@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
-import { delimiter, dirname, extname, join } from "node:path";
+import { posix, win32 } from "node:path";
 import { homedir } from "node:os";
 
 /**
@@ -47,7 +47,7 @@ export function defaultResolveEnv(): ResolveEnv {
     exists: existsSync,
     localPackage: () => {
       try {
-        return dirname(req.resolve("agent-cu/package.json"));
+        return P({ platform: process.platform } as ResolveEnv).dirname(req.resolve("agent-cu/package.json"));
       } catch {
         return undefined;
       }
@@ -56,7 +56,11 @@ export function defaultResolveEnv(): ResolveEnv {
 }
 
 /** Where `npm i -g` puts packages, across npm, nvm, nvm-windows, Volta-less setups and Homebrew. */
+/** Path semantics follow the TARGET platform, so resolution is testable from any OS. */
+const P = (e: ResolveEnv) => (e.platform === "win32" ? win32 : posix);
+
 function globalNodeModules(e: ResolveEnv): string[] {
+  const { join, dirname } = P(e);
   const dirs: string[] = [];
   if (e.env.npm_config_prefix) dirs.push(e.platform === "win32" ? join(e.env.npm_config_prefix, "node_modules") : join(e.env.npm_config_prefix, "lib", "node_modules"));
   if (e.platform === "win32") {
@@ -70,6 +74,7 @@ function globalNodeModules(e: ResolveEnv): string[] {
 }
 
 function fromPackageDir(pkg: string, e: ResolveEnv, source: string): DriverCommand | undefined {
+  const { join } = P(e);
   const bin = PLATFORM_BINARY[`${e.platform}-${e.arch}`];
   if (bin && e.exists(join(pkg, "bin", bin))) return { file: join(pkg, "bin", bin), prefixArgs: [], source: `${source} (native binary)` };
   const launcher = join(pkg, "bin", "agent-cu.js");
@@ -78,9 +83,10 @@ function fromPackageDir(pkg: string, e: ResolveEnv, source: string): DriverComma
 }
 
 function onPath(name: string, e: ResolveEnv): string[] {
+  const { join, delimiter } = P(e);
   const exts = e.platform === "win32" ? (e.env.PATHEXT ?? ".EXE;.CMD;.BAT").split(";").map((x) => x.toLowerCase()) : [""];
   const out: string[] = [];
-  for (const dir of (e.env.PATH ?? e.env.Path ?? "").split(e.platform === "win32" ? ";" : delimiter)) {
+  for (const dir of (e.env.PATH ?? e.env.Path ?? "").split(delimiter)) {
     if (!dir) continue;
     for (const ext of exts) {
       const p = join(dir, name + ext);
@@ -91,6 +97,7 @@ function onPath(name: string, e: ResolveEnv): string[] {
 }
 
 export function resolveDriver(e: ResolveEnv = defaultResolveEnv()): DriverCommand | undefined {
+  const { join, dirname, extname } = P(e);
   const override = e.env.CONFLUX_DESKTOP_BIN;
   if (override) {
     if (/\.(c|m)?js$/i.test(override)) return { file: e.execPath, prefixArgs: [override], source: "CONFLUX_DESKTOP_BIN" };
