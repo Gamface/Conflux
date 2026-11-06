@@ -426,7 +426,9 @@ export const httpRequestTool: Tool = {
     } catch {
       /* not json */
     }
-    return JSON.stringify({ status: res.status, ok: res.ok, headers: Object.fromEntries(res.headers), body: text.slice(0, 50_000), json });
+    const headers: Record<string, string> = {};
+    res.headers.forEach((v, k) => (headers[k] = v));
+    return JSON.stringify({ status: res.status, ok: res.ok, headers, body: text.slice(0, 50_000), json });
   },
 };
 
