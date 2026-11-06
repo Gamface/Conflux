@@ -1,4 +1,5 @@
-import { execFile, execFileSync } from "node:child_process";
+import { execFile } from "node:child_process";
+import { resolveDriver, type DriverCommand } from "./driver.ts";
 import type { Tool, ToolContext } from "../tools/types.ts";
 import { SnapshotCache } from "./snapshot.ts";
 
@@ -9,25 +10,25 @@ import { SnapshotCache } from "./snapshot.ts";
  * screenshots, zero vision tokens. Service-gated: only offered when the binary is installed and
  * `computer.desktop` is enabled.
  */
-const BIN = process.env.CONFLUX_DESKTOP_BIN ?? "agent-cu";
-let present: boolean | undefined;
+let driver: DriverCommand | null | undefined;
 export const desktopSnapshots = new SnapshotCache();
 
+/** The resolved driver command (cached), or null when none is installed. */
+export function desktopDriver(): DriverCommand | null {
+  if (driver === undefined) driver = resolveDriver() ?? null;
+  return driver;
+}
+
 export function hasDesktopDriver(): boolean {
-  if (present === undefined) {
-    try {
-      execFileSync(process.platform === "win32" ? "where" : "which", [BIN], { stdio: "ignore" });
-      present = true;
-    } catch {
-      present = false;
-    }
-  }
-  return present;
+  return desktopDriver() !== null;
 }
 
 function cu(args: string[], signal: AbortSignal, timeout = 30_000): Promise<string> {
+  const d = desktopDriver();
+  if (!d) return Promise.reject(new Error("desktop driver (agent-cu) is not installed"));
   return new Promise((resolve, reject) => {
-    execFile(BIN, args, { timeout, signal, maxBuffer: 8 * 1024 * 1024 }, (err, stdout, stderr) => {
+    // Never via a shell: typed text is passed as a plain argv entry on every OS.
+    execFile(d.file, [...d.prefixArgs, ...args], { timeout, signal, maxBuffer: 8 * 1024 * 1024, windowsHide: true, shell: false }, (err, stdout, stderr) => {
       if (err) reject(new Error((stderr || err.message).toString().slice(0, 2000)));
       else resolve(stdout.toString());
     });

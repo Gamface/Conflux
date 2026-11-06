@@ -8,7 +8,7 @@
  */
 import { createInterface } from "node:readline/promises";
 import { stdin, stdout } from "node:process";
-import { Runtime, loadConfig, hasPlaywright, hasDesktopDriver } from "../packages/core/src/index.ts";
+import { Runtime, loadConfig, hasPlaywright, hasDesktopDriver, desktopDriver } from "../packages/core/src/index.ts";
 
 process.removeAllListeners("warning");
 const [cmd = "serve", ...rest] = process.argv.slice(2);
@@ -120,7 +120,8 @@ switch (cmd) {
     console.log(`Node ${process.version}`);
     console.log(`Model         ${cfg.defaultModel} (${cfg.models[cfg.defaultModel]?.provider} ${cfg.models[cfg.defaultModel]?.model})`);
     console.log(`Browser       ${ok(hasPlaywright())} playwright`);
-    console.log(`Desktop       ${ok(hasDesktopDriver())} ${process.env.CONFLUX_DESKTOP_BIN ?? "agent-cu"}`);
+    const d = desktopDriver();
+    console.log(`Desktop       ${ok(hasDesktopDriver())} ${d ? `${[d.file, ...d.prefixArgs].join(" ")}  [${d.source}]` : "agent-cu not found — npm i -g agent-cu"}`);
     console.log(`Web search    ${ok(!!(process.env.TAVILY_API_KEY || process.env.BRAVE_API_KEY || process.env.SEARXNG_URL))}`);
     console.log(`MCP servers   ${Object.keys(cfg.mcpServers).join(", ") || "none"}`);
     console.log(`Telegram      ${ok(!!(cfg.channels.telegram && process.env[cfg.channels.telegram.tokenEnv]))}`);

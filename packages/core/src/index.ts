@@ -9,5 +9,6 @@ export { runReview } from "./learning/review.ts";
 export { planFor } from "./tools/planning.ts";
 export { NODE_TYPES, type WorkflowDef } from "./workflow/engine.ts";
 export { hasPlaywright } from "./computer/browser.ts";
-export { hasDesktopDriver } from "./computer/desktop.ts";
+export { hasDesktopDriver, desktopDriver } from "./computer/desktop.ts";
+export { resolveDriver } from "./computer/driver.ts";
 export { rowToMessage } from "./agent/runner.ts";
