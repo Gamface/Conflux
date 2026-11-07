@@ -240,7 +240,8 @@ export class AgentRunner {
   }
 
   profile(c: Coworker, override?: string) {
-    const key = override ?? c.model ?? this.rt.config.defaultModel;
+    const own = c.model && this.rt.config.models[c.model] ? c.model : undefined;
+    const key = override ?? own ?? this.rt.config.defaultModel;
     const p = this.rt.config.models[key] ?? this.rt.config.models[this.rt.config.defaultModel];
     if (!p) throw new Error(`no model profile "${key}"`);
     return p;

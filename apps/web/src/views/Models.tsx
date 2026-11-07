@@ -31,6 +31,7 @@ export function Models({ onChange }: { onChange: () => void }) {
   const [preset, setPreset] = useState<Preset | null>(null);
   const [form, setForm] = useState({ key: "", baseUrl: "", model: "", apiKey: "" });
   const [discovered, setDiscovered] = useState<string[] | null>(null);
+  const [embedding, setEmbedding] = useState<string[]>([]);
   const [discoverErr, setDiscoverErr] = useState("");
   const [test, setTest] = useState<TestResult | null>(null);
   const [busy, setBusy] = useState(false);
@@ -57,7 +58,9 @@ export function Models({ onChange }: { onChange: () => void }) {
     const d = await api(`/api/models/discover?baseUrl=${encodeURIComponent(baseUrl)}${apiKey ? `&apiKey=${encodeURIComponent(apiKey)}` : ""}`);
     if (d.ok) {
       setDiscovered(d.models);
-      if (d.models.length && !form.model) setForm((f) => ({ ...f, model: f.model || d.models[0] }));
+      setEmbedding(d.embedding ?? []);
+      const firstChat = d.models.find((m: string) => !(d.embedding ?? []).includes(m));
+      setForm((f) => ({ ...f, model: f.model && !(d.embedding ?? []).includes(f.model) ? f.model : firstChat ?? "" }));
     } else {
       setDiscovered(null);
       setDiscoverErr(d.error);
@@ -76,10 +79,11 @@ export function Models({ onChange }: { onChange: () => void }) {
     }
   };
 
-  const save = async () => {
+  const isEmbedding = embedding.includes(form.model) || /embed|bge-|e5-|gte-|minilm|rerank/i.test(form.model);
+  const save = async (makeDefault: boolean) => {
     setErr("");
     try {
-      await api("/api/models", { body: { ...body(), makeDefault: true } });
+      await api("/api/models", { body: { ...body(), makeDefault } });
       setPreset(null);
       await load();
       onChange();
@@ -98,7 +102,7 @@ export function Models({ onChange }: { onChange: () => void }) {
 
   return (
     <div className="page">
-      <PageHeader title="Models" subtitle="Connect the LLM your coworkers think with. Keys are stored only on this computer (data/secrets.json), never in config files or the repo." />
+      <PageHeader title="Models" subtitle="Connect the LLMs your coworkers think with. The default is used by every coworker that doesn't pick its own — assign one per coworker from its chat header or the Coworkers page. Keys are stored only on this computer (data/secrets.json)." />
 
       {isDefaultOffline && !preset && (
         <div className="notice notice-info">You're on the built-in offline model. It drives real tools but can't reason. Connect a model below to make your coworkers smart.</div>
@@ -117,6 +121,7 @@ export function Models({ onChange }: { onChange: () => void }) {
                   {t && t !== "running" && <div className={`small ${t.ok ? "ok" : "bad"}`}>{t.ok ? `✓ replied "${t.reply}" in ${t.ms} ms` : `✕ ${t.error}`}</div>}
                 </span>
                 {!p.hasKey && <Pill tone="bad">key missing</Pill>}
+                {(p as any).embedding && <Pill tone="bad">embedding model — can't chat</Pill>}
                 {p.default ? <Pill tone="accent">default</Pill> : <Button small onClick={() => api("/api/models/default", { method: "PUT", body: { key: p.key } }).then(() => (load(), onChange()))}>Use as default</Button>}
                 {p.provider !== "mock" && <Button small disabled={t === "running"} onClick={() => testRow(p.key)}>{t === "running" ? "Testing…" : "Test"}</Button>}
                 {p.provider !== "mock" && <Button small kind="ghost" onClick={() => confirm(`Remove ${p.key}? Its saved key is deleted too.`) && api(`/api/models/${p.key}`, { method: "DELETE" }).then(() => (load(), onChange()))}>Remove</Button>}
@@ -163,7 +168,7 @@ export function Models({ onChange }: { onChange: () => void }) {
               <span>Model {preset.local && <Button small kind="ghost" onClick={() => discover(form.baseUrl, form.apiKey)}>↻ refresh list</Button>}</span>
               {discovered && discovered.length > 0 ? (
                 <select className="input mono" value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })}>
-                  {discovered.map((m) => <option key={m} value={m}>{m}</option>)}
+                  {discovered.map((m) => <option key={m} value={m}>{m}{embedding.includes(m) ? "  — embedding model, can't chat" : ""}</option>)}
                 </select>
               ) : (
                 <input className="input mono" value={form.model} placeholder="model id" onChange={(e) => setForm({ ...form, model: e.target.value })} />
@@ -176,11 +181,13 @@ export function Models({ onChange }: { onChange: () => void }) {
               </div>
             )}
             {preset.local && discovered && discovered.length === 0 && <div className="notice notice-info">The server is running but has no models yet. {preset.id === "ollama" ? "Run `ollama pull llama3.1`" : "Load a model in LM Studio"}, then refresh.</div>}
+            {isEmbedding && <div className="notice notice-bad">"{form.model}" is an embedding model: it turns text into vectors for search and cannot chat or use tools. Pick a chat model (e.g. qwen, llama, mistral, gemma).</div>}
             {preset.local && <div className="muted small">Small local models may struggle with tool use. 7B+ instruction-tuned models with tool support (Qwen, Llama 3.1+) work best.</div>}
 
             <div className="row gap">
               <Button disabled={busy || !form.model || (preset.needsKey && !form.apiKey)} onClick={runTest}>{busy ? "Testing…" : "Test connection"}</Button>
-              <Button kind="primary" disabled={!form.key || !form.model || (preset.needsKey && !form.apiKey)} onClick={save}>Save & use as default</Button>
+              <Button kind="primary" disabled={!form.key || !form.model || isEmbedding || (preset.needsKey && !form.apiKey)} onClick={() => save(true)}>Save & use as default</Button>
+              <Button disabled={!form.key || !form.model || isEmbedding || (preset.needsKey && !form.apiKey)} onClick={() => save(false)} title="Add it so you can assign it to specific coworkers">Save only</Button>
               <Button kind="ghost" onClick={() => setPreset(null)}>Cancel</Button>
             </div>
             {test && <div className={`notice ${test.ok ? "notice-ok" : "notice-bad"}`}>{test.ok ? `✓ Connected — the model replied "${test.reply}" in ${test.ms} ms` : `✕ ${test.error}`}</div>}

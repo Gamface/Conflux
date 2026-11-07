@@ -149,6 +149,7 @@ export function App() {
             threadId={route[2]}
             busEvent={busEvent}
             onThread={(id) => (location.hash = id ? `#/chat/${coworker.id}/${id}` : `#/chat/${coworker.id}`)}
+            onCoworkerChange={loadCoworkers}
           />
         )}
         {section === "chat" && !coworker && coworkers.length > 0 && <div className="page muted">Unknown coworker.</div>}

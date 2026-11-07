@@ -9,6 +9,7 @@ export function Coworkers({ coworkers, onChange }: { coworkers: Coworker[]; onCh
   const [models, setModels] = useState<any[]>([]);
   const [tools, setTools] = useState<any[]>([]);
   const [err, setErr] = useState("");
+  const defaultKey = models.find((m) => m.default)?.key;
   useEffect(() => {
     api("/api/models").then(setModels);
     api("/api/tools").then(setTools);
@@ -42,17 +43,21 @@ export function Coworkers({ coworkers, onChange }: { coworkers: Coworker[]; onCh
           </div>
           <input className="input" placeholder="One-line description" value={edit.description} onChange={(e) => setEdit({ ...edit, description: e.target.value })} />
           <label className="field"><span>Role instructions</span><textarea className="input" rows={5} value={edit.role} onChange={(e) => setEdit({ ...edit, role: e.target.value })} /></label>
-          <div className="row gap wrap">
+          <div className="form-grid">
             <label className="field"><span>Model</span>
-              <select className="input" value={edit.model ?? ""} onChange={(e) => setEdit({ ...edit, model: e.target.value || undefined })}>
-                <option value="">default</option>
-                {models.map((m) => <option key={m.key} value={m.key}>{m.key} — {m.model}</option>)}
+              <select className="input" value={edit.model ?? ""} onChange={(e) => setEdit({ ...edit, model: e.target.value || null })}>
+                <option value="">Use default ({defaultKey ?? "—"})</option>
+                {models.map((m) => <option key={m.key} value={m.key} disabled={m.embedding}>{m.key} — {m.model}{m.embedding ? " (embedding, can't chat)" : ""}</option>)}
               </select>
+              <span className="muted small">{edit.model ? "This coworker always uses this model." : "Follows the default set on the Models page."} <a href="#/models">Manage models →</a></span>
             </label>
-            <label className="field grow"><span>External AG-UI agent URL <span className="muted small">(optional — replaces the model)</span></span>
+            <label className="field"><span>Spaces</span>
+              <input className="input" placeholder="default" value={(edit.spaces ?? []).join(", ")} onChange={(e) => setEdit({ ...edit, spaces: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) })} />
+              <span className="muted small">Comma-separated; empty = default. Use * for all.</span>
+            </label>
+            <label className="field span-2"><span>External AG-UI agent URL <span className="muted small">(optional — replaces the model)</span></span>
               <input className="input mono" placeholder="http://localhost:8000/agent" value={edit.agui?.url ?? ""} onChange={(e) => setEdit({ ...edit, agui: e.target.value ? { url: e.target.value } : undefined })} />
             </label>
-            <label className="field"><span>Spaces</span><input className="input" value={(edit.spaces ?? []).join(", ")} onChange={(e) => setEdit({ ...edit, spaces: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) })} /></label>
           </div>
           <label className="field"><span>Tool grants <span className="muted small">— "*", "toolset:web", "browser_*", "!terminal"</span></span>
             <input className="input mono" value={edit.tools.join(", ")} onChange={(e) => setEdit({ ...edit, tools: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) })} />
@@ -81,7 +86,7 @@ export function Coworkers({ coworkers, onChange }: { coworkers: Coworker[]; onCh
               <div className="row gap"><Avatar emoji={c.emoji} color={c.color} size={36} /><div className="grow"><div className="page-tile-title">{c.name}</div><div className="muted small mono">{c.id}</div></div></div>
               <div className="page-tile-excerpt">{c.description ?? c.role}</div>
               <div className="row gap wrap small">
-                <Pill tone="accent">{c.model}</Pill>
+                <Pill tone={c.usesDefaultModel ? "neutral" : "accent"}>{c.agui ? "AG-UI agent" : c.usesDefaultModel ? `default · ${c.effectiveModel}` : c.effectiveModel}</Pill>
                 <Pill>{c.toolCount} tools</Pill>
                 {(c.policy?.requireApproval?.length ?? 0) > 0 && <Pill tone="warn">asks first</Pill>}
                 {(c.policy?.deny?.length ?? 0) > 0 && <Pill tone="bad">extra limits</Pill>}

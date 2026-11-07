@@ -102,10 +102,13 @@ export type Coworker = {
   color?: string;
   description?: string;
   role: string;
-  model?: string;
+  /** The coworker's own model; null/undefined = use the default. */
+  model?: string | null;
+  effectiveModel?: string;
+  usesDefaultModel?: boolean;
   tools: string[];
   toolCount?: number;
-  spaces?: string[];
+  spaces?: string[] | null;
   policy?: { deny?: string[]; requireApproval?: string[]; allow?: string[] };
   learning?: { enabled?: boolean };
   agui?: { url: string };

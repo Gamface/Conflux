@@ -30,15 +30,15 @@ export type Coworker = {
   description?: string;
   /** Role instructions — the coworker's job, in words. */
   role: string;
-  /** Key into `models`. */
-  model?: string;
+  /** Key into `models`. Unset or null = use the default model. */
+  model?: string | null;
   /** Tool grants: "*", "toolset:web", "browser_*", "!terminal". */
   tools: string[];
   /** Extra boundaries for this coworker; can only narrow the organisation policy. */
   policy?: Partial<Policy>;
   learning?: Partial<LearningSettings>;
   /** Spaces this coworker may read/write pages in. Default: ["default"]. */
-  spaces?: string[];
+  spaces?: string[] | null;
   maxIterations?: number;
   /** Bring-your-own agent: any AG-UI endpoint. Its tool calls are executed through the gateway. */
   agui?: { url: string; headers?: Record<string, string> };

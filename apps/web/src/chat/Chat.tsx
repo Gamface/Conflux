@@ -26,8 +26,9 @@ const SUGGESTIONS = [
 let uid = 0;
 const nid = () => `i${++uid}`;
 
-export function Chat({ coworker, threadId, onThread, busEvent, onOpenComputer }: {
+export function Chat({ coworker, threadId, onThread, busEvent, onOpenComputer, onCoworkerChange }: {
   coworker: Coworker;
+  onCoworkerChange?: () => void;
   threadId?: string;
   onThread: (id?: string) => void;
   busEvent: { channel: string; event: any } | null;
@@ -166,7 +167,7 @@ export function Chat({ coworker, threadId, onThread, busEvent, onOpenComputer }:
             <div className="conv-title">{coworker.name}</div>
             <div className="muted small">{coworker.description ?? coworker.role.slice(0, 120)}</div>
           </div>
-          <Pill tone="accent">{coworker.model}</Pill>
+          {coworker.agui ? <Pill tone="accent">AG-UI agent</Pill> : <ModelPicker coworker={coworker} onChange={onCoworkerChange} />}
           <Pill>{coworker.toolCount ?? 0} tools</Pill>
           {hasBrowser && (
             <Button small kind={showComputer ? "primary" : "default"} onClick={() => (setShowComputer(!showComputer), onOpenComputer?.())}>🖥 Computer</Button>
@@ -346,4 +347,31 @@ function fromHistory(messages: any[], approvals: any[]): Item[] {
     else out.push({ kind: "approval", id: a.id, tool: a.tool, args: a.args ? JSON.parse(a.args) : {}, reason: a.reason, status: "pending" });
   }
   return out;
+}
+
+/** Per-coworker model, switchable right where you talk to it. */
+function ModelPicker({ coworker, onChange }: { coworker: Coworker; onChange?: () => void }) {
+  const [models, setModels] = useState<{ key: string; model: string; default: boolean; embedding?: boolean }[]>([]);
+  const [saving, setSaving] = useState(false);
+  useEffect(() => {
+    api("/api/models").then(setModels).catch(() => {});
+  }, [coworker.id]);
+  const def = models.find((m) => m.default)?.key;
+  const change = async (value: string) => {
+    setSaving(true);
+    try {
+      await api(`/api/coworkers/${coworker.id}/model`, { method: "PUT", body: { model: value || null } });
+      onChange?.();
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+  return (
+    <select className={`input model-picker ${coworker.usesDefaultModel ? "" : "own"}`} value={coworker.usesDefaultModel ? "" : coworker.model ?? ""} disabled={saving} onChange={(e) => change(e.target.value)} title="Model this coworker uses">
+      <option value="">Default ({def ?? "—"})</option>
+      {models.map((m) => <option key={m.key} value={m.key} disabled={m.embedding}>{m.key}{m.embedding ? " (embedding)" : ""}</option>)}
+    </select>
+  );
 }

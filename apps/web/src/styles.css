@@ -335,3 +335,10 @@ details > summary::-webkit-details-marker { display: none; }
 .model-link:hover { color: #fff; }
 .preset { text-align: left; font: inherit; }
 .preset.selected { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+
+.form-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px 16px; }
+.form-grid .span-2 { grid-column: span 2; }
+.form-grid select { width: 100%; text-overflow: ellipsis; }
+@media (max-width: 700px) { .form-grid { grid-template-columns: 1fr; } .form-grid .span-2 { grid-column: auto; } }
+.model-picker { font-size: 12px; padding: 3px 8px; max-width: 220px; border-radius: 20px; }
+.model-picker.own { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }

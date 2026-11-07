@@ -14,7 +14,7 @@ function fakeLLM(kind: "openai" | "anthropic", seen: { auth: string[]; requests:
     seen.auth.push(String(req.headers.authorization ?? req.headers["x-api-key"] ?? ""));
     if (req.method === "GET" && req.url === "/v1/models") {
       res.writeHead(200, { "content-type": "application/json" });
-      return res.end(JSON.stringify({ data: [{ id: "tiny-llama" }, { id: "qwen3:8b" }] }));
+      return res.end(JSON.stringify({ data: [{ id: "text-embedding-nomic-embed-text-v1.5" }, { id: "tiny-llama" }, { id: "qwen3:8b" }] }));
     }
     let raw = "";
     for await (const c of req) raw += c;
@@ -75,7 +75,8 @@ test("Models page flow with an OpenAI-compatible server: discover, test, save, c
   const app = await boot();
   try {
     const d = await app.call(`/api/models/discover?baseUrl=${encodeURIComponent(llm.url + "/v1")}`);
-    assert.deepEqual(d.models, ["qwen3:8b", "tiny-llama"]);
+    assert.deepEqual(d.models, ["qwen3:8b", "tiny-llama", "text-embedding-nomic-embed-text-v1.5"], "chat models first, embedding last");
+    assert.deepEqual(d.embedding, ["text-embedding-nomic-embed-text-v1.5"]);
 
     const t = await app.call("/api/models/test", { body: { provider: "openai", baseUrl: llm.url + "/v1", model: "qwen3:8b", apiKey: "sk-test-123" } });
     assert.equal(t.ok, true, t.error);
@@ -147,5 +148,52 @@ test("secrets saved from the UI are loaded at the next start-up", async () => {
   } finally {
     delete process.env.CONFLUX_LATER_API_KEY;
     if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("each coworker can have its own model, switch back to default, and never silently pin the default", async () => {
+  const app = await boot();
+  try {
+    for (const key of ["fast", "smart"]) await app.call("/api/models", { body: { key, provider: "openai", baseUrl: "http://127.0.0.1:9/v1", model: `${key}-m`, apiKey: "k" } });
+    await app.call("/api/models/default", { method: "PUT", body: { key: "fast" } });
+
+    let cws = await app.call("/api/coworkers");
+    const r0 = cws.find((c: any) => c.id === "researcher");
+    assert.equal(r0.model, null);
+    assert.equal(r0.effectiveModel, "fast");
+    assert.equal(r0.usesDefaultModel, true);
+
+    // Saving the editor untouched must NOT pin the current default.
+    await app.call("/api/coworkers/researcher", { method: "PUT", body: { ...r0 } });
+    await app.call("/api/models/default", { method: "PUT", body: { key: "smart" } });
+    cws = await app.call("/api/coworkers");
+    assert.equal(cws.find((c: any) => c.id === "researcher").effectiveModel, "smart", "still follows the default");
+
+    // Per-coworker assignment, and it is what the runner actually uses.
+    await app.call("/api/coworkers/researcher/model", { method: "PUT", body: { model: "fast" } });
+    await app.call("/api/coworkers/operator/model", { method: "PUT", body: { model: "smart" } });
+    cws = await app.call("/api/coworkers");
+    assert.deepEqual(cws.map((c: any) => [c.id, c.effectiveModel, c.usesDefaultModel]), [["assistant", "smart", true], ["researcher", "fast", false], ["operator", "smart", false]]);
+    assert.equal(app.s.rt.runner.profile(app.s.rt.coworkers.get("researcher")!).model, "fast-m");
+
+    // Back to default (null) clears the earlier choice, also after a restart.
+    await app.call("/api/coworkers/researcher/model", { method: "PUT", body: { model: null } });
+    assert.equal(app.s.rt.coworkers.get("researcher")!.model, null);
+    const { loadConfig } = await import("../packages/core/src/config.ts");
+    const reloaded = loadConfig({ dataDir: app.dir });
+    assert.equal(reloaded.coworkers.find((c) => c.id === "researcher")!.model, null);
+    assert.equal(reloaded.coworkers.find((c) => c.id === "operator")!.model, "smart");
+
+    // Unknown models are rejected; removing an assigned model falls back to the default.
+    const bad = await app.call("/api/coworkers/operator/model", { method: "PUT", body: { model: "nope" } });
+    assert.match(bad.error, /unknown model/);
+    await app.call("/api/models/smart", { method: "DELETE" });
+    assert.equal(app.s.rt.runner.profile(app.s.rt.coworkers.get("operator")!).model, app.s.rt.config.models[app.s.rt.config.defaultModel].model);
+
+    // An empty Spaces box means "default", not "no spaces".
+    const res = await app.call("/api/coworkers/researcher", { method: "PUT", body: { ...app.s.rt.coworkers.get("researcher")!, spaces: [] } });
+    assert.equal(res.spaces, null);
+  } finally {
+    await app.close();
   }
 });

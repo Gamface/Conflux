@@ -21,9 +21,16 @@ export function buildApi(rt: Runtime): Router {
     rt.coworkers.list().map((c) => ({
       ...c,
       toolCount: rt.tools.forCoworker(c, rt).length,
-      model: c.agui ? "AG-UI" : c.model ?? rt.config.defaultModel,
+      // `model` is the coworker's OWN choice (null = default); `effectiveModel` is what it will use.
+      model: c.model ?? null,
+      effectiveModel: c.agui ? "AG-UI" : c.model && rt.config.models[c.model] ? c.model : rt.config.defaultModel,
+      usesDefaultModel: !c.agui && !(c.model && rt.config.models[c.model]),
     })),
   );
+  r.put("/api/coworkers/:id/model", (req) => {
+    const c = must(rt.coworkers.get(req.params.id), "coworker");
+    return rt.coworkers.upsert({ ...c, model: req.body?.model || null });
+  });
   r.get("/api/coworkers/:id/tools", (req) => {
     const c = must(rt.coworkers.get(req.params.id), "coworker");
     return rt.tools.forCoworker(c, rt).map((t) => ({ name: t.name, toolset: t.toolset, description: t.description, effect: typeof t.effect === "string" ? t.effect : "dynamic" }));
@@ -34,6 +41,7 @@ export function buildApi(rt: Runtime): Router {
     Object.entries(rt.config.models).map(([key, m]) => ({
       key, provider: m.provider, model: m.model, baseUrl: m.baseUrl, apiKeyEnv: m.apiKeyEnv,
       hasKey: m.provider === "mock" || !m.apiKeyEnv || !!process.env[m.apiKeyEnv],
+      embedding: /embed|bge-|e5-|gte-|minilm|rerank/i.test(m.model),
       default: key === rt.config.defaultModel,
     })),
   );
@@ -46,8 +54,10 @@ export function buildApi(rt: Runtime): Router {
       const res = await fetch(`${base}/models`, { headers: key ? { authorization: `Bearer ${key}` } : {}, signal: AbortSignal.timeout(8000) });
       if (!res.ok) return { ok: false, error: `HTTP ${res.status}`, models: [] };
       const j: any = await res.json();
-      const models = (j.data ?? j.models ?? []).map((m: any) => m.id ?? m.name).filter(Boolean).sort();
-      return { ok: true, models };
+      const all: string[] = (j.data ?? j.models ?? []).map((m: any) => m.id ?? m.name).filter(Boolean).sort();
+      // Embedding models can't chat: list chat models first and flag the rest.
+      const isEmbed = (id: string) => /embed|bge-|e5-|gte-|minilm|rerank/i.test(id);
+      return { ok: true, models: [...all.filter((m) => !isEmbed(m)), ...all.filter(isEmbed)], embedding: all.filter(isEmbed) };
     } catch (e) {
       return { ok: false, error: (e as Error).message, models: [] };
     }

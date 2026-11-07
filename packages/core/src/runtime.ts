@@ -43,6 +43,12 @@ export class CoworkerRegistry {
     if (!/^[a-z0-9][a-z0-9-]{0,40}$/.test(c.id)) throw new Error("coworker id must be kebab-case");
     if (!c.name || !c.role) throw new Error("coworker needs a name and role instructions");
     c.tools ??= ["*"];
+    // Strip display-only fields the UI may send back, and normalise "use default" to an explicit null
+    // so a later save can clear an earlier per-coworker choice.
+    for (const k of ["toolCount", "effectiveModel", "usesDefaultModel"]) delete (c as any)[k];
+    if (!c.model) c.model = null;
+    else if (!this.rt.config.models[c.model]) throw new Error(`unknown model "${c.model}" — connect it on the Models page first`);
+    if (!c.spaces || c.spaces.length === 0) c.spaces = null;
     const i = this.rt.config.coworkers.findIndex((x) => x.id === c.id);
     if (i >= 0) this.rt.config.coworkers[i] = c;
     else this.rt.config.coworkers.push(c);
