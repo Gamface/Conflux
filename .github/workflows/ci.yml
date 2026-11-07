@@ -73,3 +73,22 @@ jobs:
           Stop-Process $p -Force
           if (-not $ok) { throw "server did not start" }
           Write-Host "health ok"
+
+  install-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Run installer the way a user would
+        run: ./install.sh --yes --no-start
+      - name: Installed copy starts and reports browser + desktop
+        run: |
+          test -x start-conflux.sh
+          test -f ~/.local/share/applications/conflux.desktop
+          node apps/server/src/main.ts & echo $! > pid
+          for i in $(seq 1 30); do curl -sf http://127.0.0.1:8787/api/health > h.json && break; sleep 1; done
+          cat h.json
+          node -e 'const h=require("./h.json"); if(!h.capabilities.browser) throw "no browser"; if(!h.capabilities.desktop) throw "no desktop"'
+          curl -sf http://127.0.0.1:8787/ | grep -q 'id="root"'
+          kill $(cat pid)

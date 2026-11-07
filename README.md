@@ -39,6 +39,14 @@ Each upstream project gets one thing exceptionally right:
 
 **Windows (one command):** download [`install.ps1`](install.ps1) into an empty folder, then run `powershell -ExecutionPolicy Bypass -File install.ps1`. It installs Node 22 if needed, Conflux, agent-cu and Chromium, creates a **Conflux** desktop shortcut and starts it.
 
+**Linux / macOS (one command, no sudo):**
+
+```bash
+gh repo clone Gamface/Conflux ~/conflux && ~/conflux/install.sh
+```
+
+This installs Node 22 with nvm if needed (after asking), plus Chromium and agent-cu inside the folder. It then runs the tests and adds a **Conflux** app launcher. Add `--service` to run it as a systemd user service. You can use `git clone` instead of `gh repo clone`; while the repo is private it will ask you to sign in.
+
 **Any OS:**
 
 ```bash
