@@ -73,3 +73,28 @@ jobs:
           Stop-Process $p -Force
           if (-not $ok) { throw "server did not start" }
           Write-Host "health ok"
+
+  install-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Run installer the way a user would
+        shell: pwsh
+        run: powershell -ExecutionPolicy Bypass -File install.ps1 -Dir "$env:RUNNER_TEMP\Conflux" -Yes -NoStart
+      - name: Installed copy starts and serves the UI
+        shell: pwsh
+        run: |
+          $dir = "$env:RUNNER_TEMP\Conflux"
+          if (-not (Test-Path "$env:USERPROFILE\Desktop\Start Conflux.lnk")) { throw "shortcut missing" }
+          $p = Start-Process node -ArgumentList "apps\server\src\main.ts" -WorkingDirectory $dir -PassThru
+          $ok = $false
+          for ($i = 0; $i -lt 30; $i++) { try { $h = Invoke-RestMethod http://127.0.0.1:8787/api/health; $ok = $true; break } catch { Start-Sleep 1 } }
+          if (-not $ok) { throw "server did not start" }
+          $h | ConvertTo-Json -Depth 5
+          if (-not $h.capabilities.browser) { throw "browser capability missing" }
+          if (-not $h.capabilities.desktop) { throw "desktop capability missing" }
+          $html = (Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8787/).Content
+          if ($html -notmatch 'id="root"') { throw "UI not served" }
+          Stop-Process -Id $p.Id -Force
