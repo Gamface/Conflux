@@ -316,7 +316,15 @@ details > summary::-webkit-details-marker { display: none; }
 
 @media (max-width: 900px) {
   .sidebar { width: 64px; }
-  .sidebar .grow, .nav-label, .sidebar-foot, .brand { font-size: 0; }
+  .sidebar { overflow-x: hidden; padding: 14px 8px; }
+  .sidebar .grow, .nav-label, .brand { font-size: 0; }
+  .nav-label { padding: 8px 0 4px; }
+  .nav-item { justify-content: center; padding: 7px 0; }
+  .nav-item .badge { position: absolute; margin: -16px 0 0 22px; font-size: 10px; }
+  .sidebar-foot { padding: 10px 0 0; align-items: center; }
+  .sidebar-foot .muted, .sidebar-foot .segmented { display: none; }
+  .model-link { font-size: 0; justify-content: center; }
+  .model-link .dot { width: 10px; height: 10px; }
   .threads { display: none; }
   .side-panel { display: none; }
   .suggestions { grid-template-columns: 1fr; }
