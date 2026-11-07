@@ -37,16 +37,6 @@ Each upstream project gets one thing exceptionally right:
 
 ## Quick start
 
-**Windows (one command, PowerShell):**
-
-```powershell
-irm https://raw.githubusercontent.com/Gamface/Conflux/main/install.ps1 | iex
-```
-
-This installs Node 22 if needed (via winget, after asking), Conflux, Chromium and agent-cu, then adds a **Start Conflux** shortcut to your Desktop. Re-run it to update; your `data` folder is kept.
-
-**Any OS, manually:**
-
 **Windows (one command):** download [`install.ps1`](install.ps1) into an empty folder, then run `powershell -ExecutionPolicy Bypass -File install.ps1`. It installs Node 22 if needed, Conflux, agent-cu and Chromium, creates a **Conflux** desktop shortcut and starts it.
 
 **Any OS:**
