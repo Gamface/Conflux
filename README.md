@@ -37,6 +37,10 @@ Each upstream project gets one thing exceptionally right:
 
 ## Quick start
 
+**Windows (one command):** download [`install.ps1`](install.ps1) into an empty folder, then run `powershell -ExecutionPolicy Bypass -File install.ps1`. It installs Node 22 if needed, Conflux, agent-cu and Chromium, creates a **Conflux** desktop shortcut and starts it.
+
+**Any OS:**
+
 ```bash
 git clone <this repo> conflux && cd conflux
 npm install                 # web UI deps (+ optional playwright for the browser)

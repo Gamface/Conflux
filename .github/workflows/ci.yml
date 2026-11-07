@@ -49,3 +49,28 @@ jobs:
       - run: node --test --test-concurrency=1 tests/desktop.test.ts
         env:
           CONFLUX_DESKTOP_E2E: "1"
+
+  install-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fresh install with install.ps1 (into an empty folder, from GitHub)
+        shell: pwsh
+        run: |
+          $d = Join-Path $env:RUNNER_TEMP "fresh"; New-Item -ItemType Directory $d | Out-Null
+          Copy-Item install.ps1 $d
+          Set-Location $d
+          powershell -ExecutionPolicy Bypass -File install.ps1 -NoBrowser -NoStart -Repo "https://github.com/${{ github.repository }}"
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          Test-Path (Join-Path $d "conflux\start-conflux.cmd") | Should-Be-True -ErrorAction SilentlyContinue
+      - name: Launcher starts the server
+        shell: pwsh
+        run: |
+          $root = Join-Path $env:RUNNER_TEMP "fresh\conflux"
+          if (-not (Test-Path "$root\start-conflux.cmd")) { throw "launcher missing" }
+          $p = Start-Process -FilePath node -ArgumentList "apps\server\src\main.ts" -WorkingDirectory $root -PassThru
+          $ok = $false
+          for ($i = 0; $i -lt 30; $i++) { try { $r = Invoke-RestMethod http://127.0.0.1:8787/api/health; if ($r.ok) { $ok = $true; break } } catch {}; Start-Sleep 1 }
+          Stop-Process $p -Force
+          if (-not $ok) { throw "server did not start" }
+          Write-Host "health ok"
