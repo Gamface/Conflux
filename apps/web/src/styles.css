@@ -322,3 +322,8 @@ details > summary::-webkit-details-marker { display: none; }
   .suggestions { grid-template-columns: 1fr; }
   .page { padding: 18px; }
 }
+
+.model-link { color: inherit; display: flex; align-items: center; gap: 6px; }
+.model-link:hover { color: #fff; }
+.preset { text-align: left; font: inherit; }
+.preset.selected { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }

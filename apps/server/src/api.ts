@@ -1,5 +1,7 @@
 import { newId, planFor, rowToMessage, StaleRevisionError, hasPlaywright, hasDesktopDriver, NODE_TYPES, runReview, type Runtime, type Coworker, type WorkflowDef } from "../../../packages/core/src/index.ts";
 import { now } from "../../../packages/core/src/db.ts";
+import { saveOverride, saveSecret, removeModelOverride, type ModelProfile } from "../../../packages/core/src/config.ts";
+import { providerFor } from "../../../packages/core/src/providers/index.ts";
 import { HttpError, Router, json, sse } from "./http.ts";
 
 /** REST + AG-UI surface. Every write the UI makes is also something an agent or script can do. */
@@ -27,7 +29,100 @@ export function buildApi(rt: Runtime): Router {
     return rt.tools.forCoworker(c, rt).map((t) => ({ name: t.name, toolset: t.toolset, description: t.description, effect: typeof t.effect === "string" ? t.effect : "dynamic" }));
   });
   r.put("/api/coworkers/:id", (req) => rt.coworkers.upsert({ ...(req.body as Coworker), id: req.params.id }));
-  r.get("/api/models", () => Object.entries(rt.config.models).map(([key, m]) => ({ key, provider: m.provider, model: m.model, default: key === rt.config.defaultModel })));
+  // ── Models: connect an LLM from the UI ───────────────────────────────────
+  r.get("/api/models", () =>
+    Object.entries(rt.config.models).map(([key, m]) => ({
+      key, provider: m.provider, model: m.model, baseUrl: m.baseUrl, apiKeyEnv: m.apiKeyEnv,
+      hasKey: m.provider === "mock" || !m.apiKeyEnv || !!process.env[m.apiKeyEnv],
+      default: key === rt.config.defaultModel,
+    })),
+  );
+  r.get("/api/models/discover", async (req) => {
+    // List models from an OpenAI-compatible server (Ollama, LM Studio, vLLM, OpenRouter…).
+    const base = String(req.query.get("baseUrl") ?? "").replace(/\/$/, "");
+    if (!/^https?:\/\//.test(base)) throw new HttpError(400, "baseUrl must start with http:// or https://");
+    const key = req.query.get("apiKey") ?? "";
+    try {
+      const res = await fetch(`${base}/models`, { headers: key ? { authorization: `Bearer ${key}` } : {}, signal: AbortSignal.timeout(8000) });
+      if (!res.ok) return { ok: false, error: `HTTP ${res.status}`, models: [] };
+      const j: any = await res.json();
+      const models = (j.data ?? j.models ?? []).map((m: any) => m.id ?? m.name).filter(Boolean).sort();
+      return { ok: true, models };
+    } catch (e) {
+      return { ok: false, error: (e as Error).message, models: [] };
+    }
+  });
+  const testProfile = async (profile: ModelProfile) => {
+    const started = Date.now();
+    try {
+      const r = await providerFor(profile.provider).complete({
+        profile: { ...profile, maxTokens: Math.min(profile.maxTokens ?? 64, 64) },
+        system: "You are a connection test.",
+        messages: [{ role: "user", content: "Reply with exactly: OK" }],
+        tools: [],
+        signal: AbortSignal.timeout(45_000),
+      });
+      return { ok: true, reply: r.text.slice(0, 200), ms: Date.now() - started, usage: r.usage };
+    } catch (e) {
+      return { ok: false, error: (e as Error).message.slice(0, 600), ms: Date.now() - started };
+    }
+  };
+  r.post("/api/models/test", async (req) => {
+    const b = req.body ?? {};
+    if (b.key && !b.provider) {
+      const p = rt.config.models[b.key];
+      if (!p) throw new HttpError(404, "model profile not found");
+      return testProfile(p);
+    }
+    // Unsaved profile: use the typed key just for this call.
+    const tmpEnv = `CONFLUX_TEST_KEY_${Date.now()}`;
+    if (b.apiKey) process.env[tmpEnv] = String(b.apiKey);
+    try {
+      return await testProfile({ provider: b.provider, model: b.model, baseUrl: b.baseUrl || undefined, apiKeyEnv: b.apiKey ? tmpEnv : b.apiKeyEnv });
+    } finally {
+      delete process.env[tmpEnv];
+    }
+  });
+  r.post("/api/models", (req) => {
+    const b = req.body ?? {};
+    const key = String(b.key ?? "").trim();
+    if (!/^[a-z0-9][a-z0-9-]{0,40}$/.test(key)) throw new HttpError(400, "name must be lowercase letters, digits and dashes");
+    if (!["openai", "anthropic"].includes(b.provider)) throw new HttpError(400, "provider must be openai (OpenAI-compatible) or anthropic");
+    if (!b.model) throw new HttpError(400, "model is required");
+    const existing = rt.config.models[key];
+    let apiKeyEnv = existing?.apiKeyEnv;
+    if (b.apiKey) {
+      apiKeyEnv = `CONFLUX_${key.toUpperCase().replace(/-/g, "_")}_API_KEY`;
+      saveSecret(rt.config.dataDir, apiKeyEnv, String(b.apiKey));
+    }
+    const profile: ModelProfile = { provider: b.provider, model: String(b.model), ...(b.baseUrl ? { baseUrl: String(b.baseUrl).replace(/\/$/, "") } : {}), ...(apiKeyEnv ? { apiKeyEnv } : {}), ...(b.provider === "anthropic" ? { maxTokens: 8192 } : {}) };
+    rt.config.models[key] = profile;
+    const patch: any = { models: { [key]: profile } };
+    if (b.makeDefault) {
+      rt.config.defaultModel = key;
+      patch.defaultModel = key;
+    }
+    saveOverride(rt.config, patch);
+    return { key, ...profile, default: rt.config.defaultModel === key };
+  });
+  r.put("/api/models/default", (req) => {
+    const key = String(req.body?.key ?? "");
+    if (!rt.config.models[key]) throw new HttpError(404, "model profile not found");
+    rt.config.defaultModel = key;
+    saveOverride(rt.config, { defaultModel: key });
+    return { ok: true, default: key };
+  });
+  r.delete("/api/models/:key", (req) => {
+    const key = req.params.key;
+    if (key === "mock") throw new HttpError(400, "the offline model cannot be removed");
+    const p = rt.config.models[key];
+    if (!p) throw new HttpError(404, "model profile not found");
+    if (p.apiKeyEnv?.startsWith("CONFLUX_")) saveSecret(rt.config.dataDir, p.apiKeyEnv, null);
+    delete rt.config.models[key];
+    removeModelOverride(rt.config, key);
+    if (rt.config.defaultModel === key) rt.config.defaultModel = "mock";
+    return { ok: true };
+  });
   r.get("/api/tools", () => rt.tools.all().map((t) => ({ name: t.name, toolset: t.toolset, effect: typeof t.effect === "string" ? t.effect : "dynamic", available: t.available ? t.available(rt) : true })));
 
   // ── Threads & runs (AG-UI) ───────────────────────────────────────────────

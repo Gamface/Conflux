@@ -9,6 +9,7 @@ import { Knowledge } from "./views/Knowledge.tsx";
 import { Learning } from "./views/Learning.tsx";
 import { Boundaries } from "./views/Boundaries.tsx";
 import { Coworkers } from "./views/Coworkers.tsx";
+import { Models } from "./views/Models.tsx";
 
 function useHash(): string[] {
   const [h, setH] = useState(location.hash);
@@ -30,6 +31,7 @@ const NAV = [
   ["learning", "Learning", "✧"],
   ["boundaries", "Boundaries", "⛨"],
   ["coworkers", "Coworkers", "☺"],
+  ["models", "Models", "◈"],
 ] as const;
 
 export function App() {
@@ -131,7 +133,7 @@ export function App() {
         <div className="grow" />
         {health && (
           <div className="sidebar-foot small">
-            <div><span className={`dot dot-${health.provider === "mock" ? "running" : "ok"}`} /> {health.provider === "mock" ? "Offline model" : `${health.provider} · ${health.model}`}</div>
+            <a href="#/models" className="model-link"><span className={`dot dot-${health.provider === "mock" ? "running" : "ok"}`} /> {health.provider === "mock" ? "Offline model — connect an LLM →" : `${health.model}`}</a>
             <div className="muted">browser {health.capabilities.browser ? "✓" : "—"} · desktop {health.capabilities.desktop ? "✓" : "—"} · MCP {Object.keys(health.capabilities.mcp ?? {}).length}</div>
             <div className="segmented tiny">
               {["light", "system", "dark"].map((t) => <button key={t} className={theme === t ? "on" : ""} onClick={() => setTheme(t)}>{t}</button>)}
@@ -157,6 +159,7 @@ export function App() {
         {section === "learning" && <Learning coworkers={coworkers} tick={tick} />}
         {section === "boundaries" && <Boundaries coworkers={coworkers} tick={tick} />}
         {section === "coworkers" && <Coworkers coworkers={coworkers} onChange={loadCoworkers} />}
+        {section === "models" && <Models onChange={() => (loadCoworkers(), api("/api/health").then(setHealth))} />}
       </main>
       <div className="toasts">
         {toasts.map((t) => (

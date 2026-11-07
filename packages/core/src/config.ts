@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { chmodSync, existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { join, resolve, dirname } from "node:path";
 import { DEFAULT_POLICY, type Policy } from "./governance/policy.ts";
 
@@ -147,9 +147,11 @@ function detectDefaultModels(): { defaultModel: string; models: Record<string, M
  * Secrets never live here: model profiles name an environment variable (`apiKeyEnv`).
  */
 export function loadConfig(opts: { configPath?: string; dataDir?: string; overrides?: Partial<Config> } = {}): Config {
+  const dataDir = resolve(opts.dataDir ?? process.env.CONFLUX_DATA_DIR ?? "./data");
+  loadSecrets(dataDir);
   const { defaultModel, models } = detectDefaultModels();
   let cfg: Config = {
-    dataDir: resolve(opts.dataDir ?? process.env.CONFLUX_DATA_DIR ?? "./data"),
+    dataDir,
     host: process.env.CONFLUX_HOST ?? "127.0.0.1",
     port: Number(process.env.PORT ?? process.env.CONFLUX_PORT ?? 8787),
     accessKey: process.env.CONFLUX_ACCESS_KEY || undefined,
@@ -195,6 +197,7 @@ export function saveOverride(cfg: Config, patch: Partial<Config>): void {
   mkdirSync(dirname(p), { recursive: true });
   const current = existsSync(p) ? JSON.parse(readFileSync(p, "utf8")) : {};
   const next = { ...current, ...patch };
+  if (patch.models) next.models = { ...(current.models ?? {}), ...patch.models };
   if (patch.coworkers) {
     const byId = new Map<string, Coworker>((current.coworkers ?? []).map((c: Coworker) => [c.id, c]));
     for (const c of patch.coworkers) byId.set(c.id, c);
@@ -205,4 +208,51 @@ export function saveOverride(cfg: Config, patch: Partial<Config>): void {
 
 export function learningFor(cfg: Config, c: Coworker): LearningSettings {
   return { ...cfg.learning, ...(c.learning ?? {}) };
+}
+
+/**
+ * API keys entered in the UI live in data/secrets.json (owner-only permissions), never in config
+ * files. At start-up they are loaded into the environment unless the variable is already set, so a
+ * real environment variable always wins.
+ */
+const SECRETS = "secrets.json";
+
+export function loadSecrets(dataDir: string): void {
+  const p = join(dataDir, SECRETS);
+  if (!existsSync(p)) return;
+  try {
+    const s = JSON.parse(readFileSync(p, "utf8")) as Record<string, string>;
+    for (const [k, v] of Object.entries(s)) if (!process.env[k] && typeof v === "string") process.env[k] = v;
+  } catch {
+    /* unreadable secrets file: ignore, keys can be re-entered */
+  }
+}
+
+export function saveSecret(dataDir: string, name: string, value: string | null): void {
+  const p = join(dataDir, SECRETS);
+  mkdirSync(dataDir, { recursive: true });
+  const s = existsSync(p) ? (JSON.parse(readFileSync(p, "utf8")) as Record<string, string>) : {};
+  if (value) {
+    s[name] = value;
+    process.env[name] = value;
+  } else {
+    delete s[name];
+    delete process.env[name];
+  }
+  writeFileSync(p, JSON.stringify(s, null, 2), { mode: 0o600 });
+  try {
+    chmodSync(p, 0o600);
+  } catch {
+    /* Windows: permissions follow the user profile */
+  }
+}
+
+/** Remove a model profile saved from the UI. */
+export function removeModelOverride(cfg: Config, key: string): void {
+  const p = join(cfg.dataDir, "overrides.json");
+  if (!existsSync(p)) return;
+  const current = JSON.parse(readFileSync(p, "utf8"));
+  if (current.models) delete current.models[key];
+  if (current.defaultModel === key) delete current.defaultModel;
+  writeFileSync(p, JSON.stringify(current, null, 2));
 }
