@@ -267,7 +267,14 @@ export function buildApi(rt: Runtime): Router {
   r.get("/api/workflows", () => rt.workflows.list());
   r.get("/api/workflow-node-types", () => NODE_TYPES);
   r.get("/api/workflows/:id", (req) => must(rt.workflows.get(req.params.id), "workflow"));
-  r.put("/api/workflows/:id", (req) => rt.workflows.save({ ...(req.body as WorkflowDef), id: req.params.id }));
+  r.put("/api/workflows/:id", (req) => {
+    try {
+      return rt.workflows.save({ ...(req.body as WorkflowDef), id: req.params.id });
+    } catch (e) {
+      throw new HttpError(400, (e as Error).message); // validation problems are the user's to fix, not a server error
+    }
+  });
+  r.get("/api/workflows/:id/exists", (req) => ({ exists: !!rt.workflows.get(req.params.id) }));
   r.delete("/api/workflows/:id", (req) => {
     rt.workflows.delete(req.params.id);
     return { ok: true };

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { api, stream, timeAgo } from "../api.ts";
 import { Button, Empty, JsonBlock, PageHeader, Pill } from "../ui.tsx";
 import { WorkflowTrace } from "../chat/cards.tsx";
+import { WorkflowBuilder } from "./WorkflowBuilder.tsx";
 
 const TYPE_COLOR: Record<string, string> = {
   start: "#64748b", end: "#64748b", llm: "#6d5dfc", agent: "#c026d3", tool: "#0ea5a4", http: "#0284c7",
@@ -9,33 +10,62 @@ const TYPE_COLOR: Record<string, string> = {
 };
 
 const BLANK = {
-  id: "my-workflow",
-  name: "My workflow",
+  id: "",
+  name: "",
   description: "",
   exposeAsTool: true,
-  inputs: [{ name: "text", type: "string", required: true }],
+  inputs: [{ name: "text", type: "string", required: true, description: "What to work on" }],
   nodes: [
-    { id: "start", type: "start", title: "Start" },
-    { id: "llm1", type: "llm", title: "LLM", data: { prompt: "Rewrite clearly:\n{{inputs.text}}" } },
-    { id: "end", type: "end", title: "End", data: { outputs: { result: "{{llm1.text}}" } } },
+    { id: "start", type: "start", title: "Start", position: { x: 40, y: 60 } },
+    { id: "llm1", type: "llm", title: "Ask a model", data: { prompt: "Rewrite this clearly and concisely:\n\n{{inputs.text}}" }, position: { x: 270, y: 60 } },
+    { id: "end", type: "end", title: "End", data: { outputs: { result: "{{llm1.text}}" } }, position: { x: 500, y: 60 } },
   ],
   edges: [{ source: "start", target: "llm1" }, { source: "llm1", target: "end" }],
 };
 
 export function Workflows({ id }: { id?: string }) {
   const [list, setList] = useState<any[]>([]);
+  const [creating, setCreating] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newDesc, setNewDesc] = useState("");
+  const [createErr, setCreateErr] = useState("");
   const load = () => api("/api/workflows").then(setList);
   useEffect(() => {
     load();
   }, [id]);
   if (id) return <WorkflowDetail id={id} onSaved={load} />;
+  const create = async () => {
+    setCreateErr("");
+    const name = newName.trim();
+    if (!name) return setCreateErr("Give it a name.");
+    let slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 48) || "workflow";
+    if (!/^[a-z0-9]/.test(slug)) slug = `wf-${slug}`;
+    for (let i = 2; list.some((w) => w.id === slug); i++) slug = `${slug.replace(/-\d+$/, "")}-${i}`;
+    try {
+      const w = await api(`/api/workflows/${slug}`, { method: "PUT", body: { ...BLANK, id: slug, name, description: newDesc.trim() } });
+      location.hash = `#/workflows/${w.id}`;
+    } catch (e) {
+      setCreateErr((e as Error).message);
+    }
+  };
   return (
     <div className="page">
       <PageHeader
         title="Workflows"
         subtitle="Repeatable pipelines of model, agent, tool, HTTP, code, branch and retrieval steps. Every step runs through Boundaries."
-        actions={<Button kind="primary" onClick={() => api(`/api/workflows/${BLANK.id}-${Date.now().toString(36)}`, { method: "PUT", body: BLANK }).then((w) => (location.hash = `#/workflows/${w.id}`))}>+ New workflow</Button>}
+        actions={!creating && <Button kind="primary" onClick={() => setCreating(true)}>+ New workflow</Button>}
       />
+      {creating && (
+        <form className="card stack" onSubmit={(e) => (e.preventDefault(), create())}>
+          <h3>New workflow</h3>
+          <div className="row gap wrap">
+            <label className="field grow"><span>Name</span><input className="input" autoFocus placeholder="e.g. Weekly competitor digest" value={newName} onChange={(e) => setNewName(e.target.value)} /></label>
+            <label className="field grow"><span>What it does <span className="muted small">(optional)</span></span><input className="input" placeholder="Fetches competitor sites and summarises changes" value={newDesc} onChange={(e) => setNewDesc(e.target.value)} /></label>
+          </div>
+          {createErr && <div className="tool-error">{createErr}</div>}
+          <div className="row gap"><Button kind="primary" type="submit">Create & open builder</Button><Button kind="ghost" onClick={() => setCreating(false)}>Cancel</Button></div>
+        </form>
+      )}
       {list.length === 0 ? (
         <Empty title="No workflows" />
       ) : (
@@ -127,7 +157,7 @@ function Graph({ def, trace }: { def: any; trace?: any[] }) {
 
 function WorkflowDetail({ id, onSaved }: { id: string; onSaved: () => void }) {
   const [def, setDef] = useState<any>(null);
-  const [tab, setTab] = useState<"run" | "json" | "history">("run");
+  const [tab, setTab] = useState<"build" | "run" | "json" | "history">("build");
   const [inputs, setInputs] = useState<Record<string, string>>({});
   const [run, setRun] = useState<any>(null);
   const [live, setLive] = useState<string[]>([]);
@@ -176,12 +206,14 @@ function WorkflowDetail({ id, onSaved }: { id: string; onSaved: () => void }) {
     <div className="page">
       <div className="row gap"><Button kind="ghost" onClick={() => (location.hash = "#/workflows")}>← Workflows</Button></div>
       <PageHeader title={def.name} subtitle={def.description} actions={def.exposeAsTool ? <Pill tone="accent">coworker tool · wf_{def.id.replace(/-/g, "_")}</Pill> : undefined} />
-      <Graph def={def} trace={run?.trace} />
-      <div className="segmented" style={{ margin: "16px 0" }}>
+      <div className="segmented" style={{ margin: "4px 0 0" }}>
+        <button className={tab === "build" ? "on" : ""} onClick={() => setTab("build")}>Build</button>
         <button className={tab === "run" ? "on" : ""} onClick={() => setTab("run")}>Run</button>
-        <button className={tab === "json" ? "on" : ""} onClick={() => setTab("json")}>Definition</button>
+        <button className={tab === "json" ? "on" : ""} onClick={() => (setJson(JSON.stringify(def, null, 2)), setTab("json"))}>Definition (JSON)</button>
         <button className={tab === "history" ? "on" : ""} onClick={() => setTab("history")}>History ({runs.length})</button>
       </div>
+      {tab === "build" && <WorkflowBuilder key={def.id} initial={def} onSaved={(d) => (setDef(d), onSaved())} />}
+      {tab !== "build" && <Graph def={def} trace={run?.trace} />}
       {tab === "run" && (
         <div className="two-col">
           <div className="card stack">

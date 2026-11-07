@@ -5,7 +5,7 @@ import { newId, noopEmit, type Emit } from "../events.ts";
 import { now, type Row } from "../db.ts";
 import type { Runtime } from "../runtime.ts";
 import type { Tool, ToolContext } from "../tools/types.ts";
-import { evaluate } from "../governance/expr.ts";
+import { evaluate, validate as validateExpr } from "../governance/expr.ts";
 import { providerFor } from "../providers/index.ts";
 
 /**
@@ -210,6 +210,32 @@ export class WorkflowEngine {
     if (def.nodes.filter((n) => n.type === "start").length !== 1) errs.push("exactly one start node is required");
     for (const n of def.nodes) if (!EXECUTORS[n.type]) errs.push(`node ${n.id}: unknown type "${n.type}"`);
     for (const e of def.edges) if (!ids.has(e.source) || !ids.has(e.target)) errs.push(`edge ${e.source}→${e.target} references a missing node`);
+    const byId = new Map(def.nodes.map((n) => [n.id, n]));
+    for (const e of def.edges) {
+      const src = byId.get(e.source);
+      if (src?.type === "if_else") {
+        const handles = [...((src.data?.cases ?? []) as { id: string }[]).map((c) => c.id), "else", "error"];
+        if (!e.sourceHandle) errs.push(`connection from "${src.title ?? src.id}" to "${byId.get(e.target)?.title ?? e.target}" must say which case it belongs to`);
+        else if (!handles.includes(e.sourceHandle)) errs.push(`"${src.title ?? src.id}" has no case named "${e.sourceHandle}"`);
+      }
+    }
+    for (const n of def.nodes) {
+      if (n.type !== "if_else") continue;
+      const cases = (n.data?.cases ?? []) as { id: string; when: string }[];
+      if (!cases.length) errs.push(`"${n.title ?? n.id}" needs at least one case`);
+      for (const c of cases) {
+        if (!c.when?.trim()) errs.push(`"${n.title ?? n.id}" case "${c.id}" has no condition`);
+        else {
+          const bad = validateExpr(c.when);
+          if (bad) errs.push(`"${n.title ?? n.id}" case "${c.id}": ${bad}`);
+        }
+      }
+    }
+    const reach = new Set<string>();
+    const start = def.nodes.find((n) => n.type === "start");
+    const walk = (id: string) => { if (reach.has(id)) return; reach.add(id); for (const e of def.edges) if (e.source === id) walk(e.target); };
+    if (start) walk(start.id);
+    for (const n of def.nodes) if (!reach.has(n.id)) errs.push(`"${n.title ?? n.id}" isn't connected to the start, so it would never run`);
     // Cycle check (Kahn).
     const indeg = new Map([...ids].map((i) => [i, 0]));
     for (const e of def.edges) indeg.set(e.target, (indeg.get(e.target) ?? 0) + 1);

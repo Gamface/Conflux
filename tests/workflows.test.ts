@@ -97,3 +97,31 @@ test("workflows marked exposeAsTool become coworker tools", async () => {
     await rt.cleanup();
   }
 });
+
+test("validation explains branch wiring problems in plain words", async () => {
+  const rt = makeRuntime();
+  try {
+    const base: any = {
+      id: "branchy", name: "Branchy", inputs: [{ name: "n", type: "number" }],
+      nodes: [
+        { id: "start", type: "start" },
+        { id: "b", type: "if_else", title: "Big?", data: { cases: [{ id: "big", when: "inputs.n > 10" }] } },
+        { id: "t", type: "template", title: "Note", data: { template: "big" } },
+        { id: "end", type: "end", data: { outputs: { r: "{{t.text}}" } } },
+      ],
+      edges: [{ source: "start", target: "b" }, { source: "b", target: "t", sourceHandle: "big" }, { source: "b", target: "end", sourceHandle: "else" }, { source: "t", target: "end" }],
+    };
+    rt.workflows.save(base); // valid
+    assert.throws(() => rt.workflows.save({ ...base, edges: [...base.edges, { source: "b", target: "end" }] }), /must say which case/);
+    assert.throws(() => rt.workflows.save({ ...base, edges: base.edges.map((e: any) => (e.sourceHandle === "big" ? { ...e, sourceHandle: "yes" } : e)) }), /no case named "yes"/);
+    assert.throws(() => rt.workflows.save({ ...base, nodes: base.nodes.map((n: any) => (n.id === "b" ? { ...n, data: { cases: [{ id: "big", when: "" }] } } : n)) }), /has no condition/);
+    assert.throws(() => rt.workflows.save({ ...base, nodes: [...base.nodes, { id: "orphan", type: "template", title: "Lonely", data: { template: "x" } }] }), /"Lonely" isn't connected/);
+    const big = await rt.workflows.run("branchy", { n: 50 });
+    assert.equal(big.outputs.r, "big");
+    const small = await rt.workflows.run("branchy", { n: 1 });
+    assert.equal(small.trace.find((x) => x.id === "t")!.status, "skipped");
+    assert.equal(small.trace.find((x) => x.id === "end")!.status, "succeeded", "the else path still reaches End");
+  } finally {
+    await rt.cleanup();
+  }
+});
