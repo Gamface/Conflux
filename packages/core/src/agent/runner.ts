@@ -5,6 +5,7 @@ import type { Coworker } from "../config.ts";
 import { providerFor, type ChatMessage, type Completion, type ToolSpec } from "../providers/index.ts";
 import type { Initiator, ToolResult } from "../tools/types.ts";
 import { buildSystemPrompt } from "./prompt.ts";
+import { extractTextToolCalls } from "../providers/text-tool-calls.ts";
 import { aguiStep } from "./agui-client.ts";
 import { maybeReview } from "../learning/review.ts";
 
@@ -171,6 +172,15 @@ export class AgentRunner {
           onToolCallArgs: (id, delta) => emit({ type: "TOOL_CALL_ARGS", toolCallId: id, delta }),
         });
         if (textStarted) emit({ type: "TEXT_MESSAGE_END", messageId });
+        // Models that print a tool call as text (common with small/local models): run it anyway.
+        if (!completion.toolCalls.length && specs.length && completion.text.includes("{")) {
+          const rescued = extractTextToolCalls(completion.text, specs.map((t) => t.name));
+          if (rescued.calls.length) {
+            completion.toolCalls = rescued.calls;
+            completion.text = rescued.text;
+            emit({ type: "CUSTOM", name: "text_replaced", value: { messageId, text: rescued.text } });
+          }
+        }
         usage.input += completion.usage.input;
         usage.output += completion.usage.output;
         rt.db.run(

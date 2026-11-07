@@ -298,6 +298,9 @@ function reduce(prev: Item[], e: any): Item[] {
     }
     case "CUSTOM":
       switch (e.name) {
+        case "text_replaced":
+          // The model printed a tool call as text; Conflux ran it as a real call, so drop the raw JSON.
+          return e.value.text ? upd<any>(e.value.messageId, (x) => ({ ...x, text: e.value.text })) : prev.filter((x) => x.id !== e.value.messageId);
         case "tool_ui":
           return upd<ToolItem>(e.value.toolCallId, (x) => ({ ...x, ui: e.value.ui, data: e.value.data, isError: e.value.isError }));
         case "approval_requested":

@@ -40,6 +40,23 @@ export function parseFrontmatter(content: string): { meta: Record<string, string
 }
 
 const NAME_RE = /^[a-z0-9][a-z0-9-]{1,63}$/;
+
+/**
+ * Forgive the common slips models make when writing SKILL.md: a stray YAML block marker before the
+ * frontmatter, and a human title ("Video Editing Skill") where a kebab-case name belongs.
+ */
+export function normalizeSkill(content: string): string {
+  let c = content.replace(/^\uFEFF/, "").replace(/^\s*\|-?\s*(?=---)/, "").trimStart();
+  const m = c.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+  if (m) {
+    c = c.replace(/^(---\r?\n[\s\S]*?^name:\s*)(["']?)([^\n"']+)\2\s*$/m, (all, pre, _q, name) => {
+      if (NAME_RE.test(name.trim())) return all;
+      const slug = name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 64);
+      return slug.length >= 2 ? `${pre}${slug}` : all;
+    });
+  }
+  return c;
+}
 const MAX_SKILL_CHARS = 30_000;
 
 export function validateSkill(content: string): string | null {
@@ -126,6 +143,7 @@ export class SkillStore {
   }
 
   create(content: string, createdBy: string): SkillMeta {
+    content = normalizeSkill(content);
     const err = validateSkill(content);
     if (err) throw new Error(err);
     const { meta } = parseFrontmatter(content);

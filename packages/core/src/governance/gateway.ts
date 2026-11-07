@@ -40,9 +40,13 @@ export class Gateway {
       audit({ decision: "deny", rule: "(not granted to coworker)", outcome: "refused" });
       return { content: `Refused: ${coworker.name} has not been granted "${name}".`, isError: true };
     }
-    const missing = (tool.parameters.required ?? []).filter((k) => args[k] === undefined || args[k] === null);
-    if (missing.length) {
-      return { content: `Error: missing required argument(s) ${missing.join(", ")} for ${name}.`, isError: true };
+    const problems = checkArgs(tool, args);
+    if (problems.length) {
+      audit({ decision: "deny", rule: "(invalid arguments)", outcome: "refused", summary: problems.join("; ") });
+      return {
+        content: `Error: invalid arguments for ${name}: ${problems.join("; ")}.\nCall it again with this shape:\n${describeParams(tool)}`,
+        isError: true,
+      };
     }
 
     const effect = toolEffect(tool, args);
@@ -149,4 +153,49 @@ function redact(args: Record<string, unknown>): Record<string, unknown> {
     out[k] = SECRET_KEY.test(k) ? "[redacted]" : typeof v === "string" && v.length > 2000 ? v.slice(0, 2000) + "…" : v;
   }
   return out;
+}
+
+/** Apply aliases, coerce obvious scalar types, and report what does not match the tool's schema. */
+function checkArgs(tool: Tool, args: Record<string, any>): string[] {
+  const props = tool.parameters.properties ?? {};
+  for (const [key, map] of Object.entries(tool.aliases ?? {})) {
+    const v = args[key];
+    if (typeof v === "string" && map[v.toLowerCase()]) args[key] = map[v.toLowerCase()];
+  }
+  const problems: string[] = [];
+  for (const k of tool.parameters.required ?? []) if (args[k] === undefined || args[k] === null || args[k] === "") problems.push(`"${k}" is required`);
+  for (const [k, v] of Object.entries(args)) {
+    const spec = props[k];
+    if (!spec) continue;
+    if (spec.type === "number" && typeof v === "string" && v.trim() !== "" && !isNaN(Number(v))) args[k] = Number(v);
+    if (spec.type === "boolean" && (v === "true" || v === "false")) args[k] = v === "true";
+    if ((spec.type === "array" || spec.type === "object") && typeof v === "string") {
+      try {
+        args[k] = JSON.parse(v);
+      } catch {
+        /* leave as is; reported below */
+      }
+    }
+    const val = args[k];
+    if (spec.enum && !spec.enum.includes(val)) problems.push(`"${k}" must be one of ${spec.enum.map((x: string) => `"${x}"`).join(", ")} (got ${JSON.stringify(val)})`);
+    else if (spec.type === "array" && !Array.isArray(val)) problems.push(`"${k}" must be a list`);
+    else if (spec.type === "object" && (typeof val !== "object" || val === null || Array.isArray(val))) problems.push(`"${k}" must be an object`);
+    else if (spec.type === "string" && typeof val !== "string") args[k] = typeof val === "object" ? JSON.stringify(val) : String(val);
+  }
+  const unknown = Object.keys(args).filter((k) => !(k in props));
+  if (problems.length && unknown.length) problems.push(`unknown argument(s) ${unknown.map((k) => `"${k}"`).join(", ")}`);
+  if (!problems.length && unknown.length && (tool.parameters.required ?? []).length && unknown.length >= Object.keys(args).length) {
+    problems.push(`none of the arguments ${unknown.map((k) => `"${k}"`).join(", ")} belong to this tool`);
+  }
+  return problems;
+}
+
+function describeParams(tool: Tool): string {
+  const req = new Set(tool.parameters.required ?? []);
+  return Object.entries(tool.parameters.properties ?? {})
+    .map(([k, s]: [string, any]) => {
+      const type = s.enum ? s.enum.map((x: string) => `"${x}"`).join(" | ") : s.type === "array" && s.items?.properties ? `list of { ${Object.keys(s.items.properties).join(", ")} }` : s.type ?? "any";
+      return `- ${k}${req.has(k) ? " (required)" : ""}: ${type}${s.description ? ` — ${s.description}` : ""}`;
+    })
+    .join("\n");
 }

@@ -5,6 +5,7 @@ export const memoryTool: Tool = {
   name: "memory",
   toolset: "learning",
   effect: "learn",
+  aliases: { action: { save: "add", create: "add", remember: "add", update: "replace", edit: "replace", delete: "remove", forget: "remove", show: "list", read: "list" }, target: { profile: "user", me: "user", notes: "memory", environment: "memory" } },
   description:
     "Curated long-term memory that persists across conversations. target=user for facts about the user (preferences, role, constraints, communication style); target=memory for your own notes about the environment, conventions and lessons learned. Actions: add, replace (old_text → content), remove (old_text). Keep entries short and durable; consolidate when near the limit. Never store secrets.",
   parameters: {
@@ -55,9 +56,10 @@ export const skillViewTool: Tool = {
 export const skillManageTool: Tool = {
   name: "skill_manage",
   toolset: "learning",
+  aliases: { action: { add: "create", new: "create", save: "create", write: "create", update: "patch", edit: "patch", modify: "patch", improve: "patch", remove: "delete", add_file: "write_file", file: "write_file" } },
   effect: (a) => (a?.action === "delete" ? "destructive" : "learn"),
   description:
-    "Create or improve reusable skills (procedural memory). create: full SKILL.md content with YAML frontmatter (name: kebab-case, description: when to use it) followed by numbered steps, pitfalls and how to verify. patch: replace old_text with new_text inside an existing skill (bundled skills are forked, originals untouched). write_file: add references/, scripts/ or templates/ files. delete: remove a learned skill.",
+    "Create or improve reusable skills (procedural memory). Skills are NOT knowledge datasets. Example create call: {\"action\": \"create\", \"content\": \"---\\nname: kdenlive-export\\ndescription: Export a Kdenlive project to MP4\\n---\\n1. ...\"}. create: full SKILL.md content with YAML frontmatter (name: kebab-case, description: when to use it) followed by numbered steps, pitfalls and how to verify. patch: replace old_text with new_text inside an existing skill (bundled skills are forked, originals untouched). write_file: add references/, scripts/ or templates/ files. delete: remove a learned skill.",
   parameters: {
     type: "object",
     properties: {

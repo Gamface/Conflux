@@ -40,7 +40,8 @@ test("skills: create, validate, patch bundled forks it, view counts usage", asyn
   const rt = makeRuntime();
   try {
     assert.throws(() => rt.skills.create("no frontmatter", "t"), /frontmatter/);
-    assert.throws(() => rt.skills.create("---\nname: Bad Name\ndescription: x\n---\nbody", "t"), /kebab/);
+    assert.equal(rt.skills.create("---\nname: Bad Name\ndescription: x\n---\nbody", "t").name, "bad-name", "human titles are slugified");
+    assert.throws(() => rt.skills.create("---\nname: !\ndescription: x\n---\nbody", "t"), /kebab/);
     const s = rt.skills.create("---\nname: deploy-app\ndescription: Deploy the app\n---\n1. build\n2. ship", "assistant");
     assert.equal(s.source, "learned");
     assert.match(readFileSync(join(s.path, "SKILL.md"), "utf8"), /created-by: assistant/);

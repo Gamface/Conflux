@@ -49,6 +49,11 @@ export type Tool = {
   toolset: string;
   effect: Effect | ((args: any) => Effect);
   /**
+   * Forgiving argument names models commonly guess, e.g. { action: { add: "create" } }. Applied
+   * before validation so a near-miss runs instead of failing.
+   */
+  aliases?: Record<string, Record<string, string>>;
+  /**
    * Service gate (Hermes `check_fn`): is the backing service reachable / configured at all?
    * Unavailable tools are not offered to the model.
    */
