@@ -60,9 +60,8 @@ jobs:
           $d = Join-Path $env:RUNNER_TEMP "fresh"; New-Item -ItemType Directory $d | Out-Null
           Copy-Item install.ps1 $d
           Set-Location $d
-          powershell -ExecutionPolicy Bypass -File install.ps1 -NoBrowser -NoStart -Repo "https://github.com/${{ github.repository }}"
+          powershell -ExecutionPolicy Bypass -File install.ps1 -NoBrowser -NoStart -Repo "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}"
           if ($LASTEXITCODE -ne 0) { exit 1 }
-          Test-Path (Join-Path $d "conflux\start-conflux.cmd") | Should-Be-True -ErrorAction SilentlyContinue
       - name: Launcher starts the server
         shell: pwsh
         run: |

@@ -58,13 +58,23 @@ if (Is-Conflux $here) { $root = $here }
 elseif (Is-Conflux (Join-Path $here "conflux")) { $root = Join-Path $here "conflux" }
 else {
   $root = Join-Path $here "conflux"
+  $got = $false
   if (Get-Command git -ErrorAction SilentlyContinue) {
+    # For a private repo, Git Credential Manager opens a GitHub sign-in window.
     git clone --depth 1 $Repo $root
-  } else {
-    $zip = Join-Path $env:TEMP "conflux-main.zip"
-    Invoke-WebRequest "$Repo/archive/refs/heads/main.zip" -OutFile $zip
-    Expand-Archive $zip -DestinationPath $here -Force
-    Rename-Item (Join-Path $here "Conflux-main") $root
+    $got = ($LASTEXITCODE -eq 0) -and (Test-Path (Join-Path $root "package.json"))
+  }
+  if (-not $got) {
+    try {
+      $zip = Join-Path $env:TEMP "conflux-main.zip"
+      Invoke-WebRequest "$Repo/archive/refs/heads/main.zip" -OutFile $zip
+      Expand-Archive $zip -DestinationPath $here -Force
+      Rename-Item (Get-ChildItem $here -Directory | Where-Object Name -like "Conflux-main*" | Select-Object -First 1).FullName $root
+      $got = $true
+    } catch {}
+  }
+  if (-not $got) {
+    throw "Could not download Conflux from $Repo. If the repo is private, install Git for Windows (winget install Git.Git) and sign in when prompted, or put install.ps1 inside an existing Conflux folder and re-run."
   }
 }
 Set-Location $root
