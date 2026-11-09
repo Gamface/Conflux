@@ -109,6 +109,7 @@ const EXECUTORS: Record<string, Executor> = {
       signal: c.tool.signal,
       grants: d.tools,
       onWaiting: c.tool.onWaiting,
+      trustThreadId: c.tool.trustThreadId ?? c.tool.threadId,
       emit: (e) => {
         if (e.type === "CUSTOM" && e.name.startsWith("approval_")) c.emit(e);
       },
@@ -315,6 +316,7 @@ export class WorkflowEngine {
       rt: this.rt,
       depth: opts.depth ?? opts.parent?.depth ?? 0,
       onWaiting: opts.parent?.onWaiting,
+      trustThreadId: opts.parent?.trustThreadId ?? opts.parent?.threadId,
     };
     const c: RunCtx = { rt: this.rt, def, tool, emit, depth: tool.depth };
 

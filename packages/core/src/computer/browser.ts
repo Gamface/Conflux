@@ -139,6 +139,11 @@ async function pageContext(a: any, ctx: ToolContext): Promise<Record<string, unk
 
 const available = (_rt: Runtime) => hasPlaywright();
 
+const NAV_KEYS = new Set(["pagedown", "pageup", "arrowdown", "arrowup", "arrowleft", "arrowright", "down", "up", "left", "right", "home", "end", "tab", "shift+tab", "escape", "esc", "space"]);
+export function isNavigationKey(key: unknown): boolean {
+  return typeof key === "string" && NAV_KEYS.has(key.trim().toLowerCase());
+}
+
 export const browserTools: Tool[] = [
   {
     name: "browser_navigate",
@@ -203,7 +208,8 @@ export const browserTools: Tool[] = [
   {
     name: "browser_key",
     toolset: "computer",
-    effect: "write",
+    // Moving around a page (scrolling, arrow keys, Tab, Escape) reads; Enter, typing and shortcuts act.
+    effect: (a) => (isNavigationKey(a?.key) ? "read" : "write"),
     available,
     description: "Press a key or combo in the browser (e.g. Enter, Escape, Control+A, PageDown).",
     parameters: { type: "object", properties: { key: { type: "string" } }, required: ["key"] },

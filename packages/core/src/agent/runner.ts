@@ -23,6 +23,8 @@ export type RunOptions = {
   /** Ephemeral runs (subagents, workflow agent nodes) don't create a visible thread. */
   ephemeral?: boolean;
   onWaiting?: (waiting: boolean) => void;
+  /** Conversation whose "approve all" grants apply (subagents and workflow agents inherit the caller's). */
+  trustThreadId?: string;
   /** Override the model profile for this run. */
   model?: string;
 };
@@ -203,7 +205,7 @@ export class AgentRunner {
           emit({ type: "TOOL_CALL_END", toolCallId: call.id });
         }
         const results = await this.executeCalls(completion.toolCalls, {
-          runId, threadId, coworker, initiator, emit, signal: controller.signal, rt, depth, onWaiting: opts.onWaiting,
+          runId, threadId, coworker, initiator, emit, signal: controller.signal, rt, depth, onWaiting: opts.onWaiting, trustThreadId: opts.trustThreadId,
         }, grants);
         toolCallCount += results.length;
         for (const { call, result } of results) {

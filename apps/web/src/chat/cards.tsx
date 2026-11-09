@@ -233,10 +233,10 @@ export type QuestionItem = { kind: "question"; id: string; question: string; cho
 export function ApprovalCard({ item }: { item: ApprovalItem }) {
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
-  const decide = async (approved: boolean) => {
+  const decide = async (approved: boolean, remember?: "tool" | "all") => {
     setBusy(true);
     try {
-      await api(`/api/approvals/${item.id}`, { body: { approved, response: note || undefined } });
+      await api(`/api/approvals/${item.id}`, { body: { approved, response: note || undefined, remember } });
     } catch (e) {
       alert((e as Error).message);
     } finally {
@@ -260,6 +260,13 @@ export function ApprovalCard({ item }: { item: ApprovalItem }) {
           <input className="input grow" placeholder="Optional note to the agent…" value={note} onChange={(e) => setNote(e.target.value)} />
           <Button kind="danger" disabled={busy} onClick={() => decide(false)}>Deny</Button>
           <Button kind="primary" disabled={busy} onClick={() => decide(true)}>Approve</Button>
+        </div>
+      )}
+      {pending && (
+        <div className="row gap wrap approve-more">
+          <span className="muted small">Stop asking in this chat:</span>
+          <Button small disabled={busy} onClick={() => decide(true, "tool")} title={`Approve, and run ${item.tool} without asking for the rest of this conversation`}>Always allow <span className="mono">{item.tool}</span></Button>
+          <Button small disabled={busy} onClick={() => decide(true, "all")} title="Approve, and approve every action in this conversation from now on (Never rules still apply)">Allow everything</Button>
         </div>
       )}
     </div>

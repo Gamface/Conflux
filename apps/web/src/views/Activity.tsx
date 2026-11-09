@@ -27,7 +27,12 @@ export function Activity({ coworkers, tick }: { coworkers: Coworker[]; tick: num
 
       {approvals.length > 0 && (
         <section className="section">
-          <h2>Waiting on you <Pill tone="warn">{approvals.length}</Pill></h2>
+          <div className="row gap">
+            <h2 className="grow">Waiting on you <Pill tone="warn">{approvals.length}</Pill></h2>
+            {approvals.filter((a) => a.kind !== "question").length > 1 && (
+              <Button kind="primary" onClick={() => api("/api/approvals/approve-all", { body: {} }).then(load)}>Approve all ({approvals.filter((a) => a.kind !== "question").length})</Button>
+            )}
+          </div>
           <div className="stack">
             {approvals.map((a) =>
               a.kind === "question" ? (

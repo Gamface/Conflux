@@ -146,7 +146,7 @@ export function buildApi(rt: Runtime): Router {
     const t = must(rt.db.get("SELECT * FROM threads WHERE id=?", req.params.id), "thread");
     const messages = rt.db.all("SELECT * FROM messages WHERE thread_id=? ORDER BY created_at, rowid", t.id).map((m) => ({ id: m.id, runId: m.run_id, compacted: !!m.compacted, ...rowToMessage(m), ...(m.ui ? { ui: JSON.parse(m.ui) } : {}) }));
     const approvals = rt.db.all("SELECT * FROM approvals WHERE thread_id=? AND status='pending'", t.id);
-    return { thread: { ...t, system_snapshot: undefined }, messages, plan: planFor(t.id), approvals };
+    return { thread: { ...t, system_snapshot: undefined }, messages, plan: planFor(t.id), approvals, trust: rt.approvals.trustFor(t.id) };
   });
   r.put("/api/threads/:id", (req) => {
     rt.db.run("UPDATE threads SET title=COALESCE(?, title), archived=COALESCE(?, archived) WHERE id=?", req.body.title, req.body.archived, req.params.id);
@@ -192,11 +192,27 @@ export function buildApi(rt: Runtime): Router {
   r.get("/api/approvals", (req) =>
     req.query.get("status") === "all" ? rt.db.all("SELECT * FROM approvals ORDER BY ts DESC LIMIT 200") : rt.approvals.pending(),
   );
+  // Approve everything waiting — optionally only in one conversation, optionally "and stop asking there".
+  r.post("/api/approvals/approve-all", (req) => {
+    const ttlMs = req.body?.ttlMinutes ? Number(req.body.ttlMinutes) * 60_000 : undefined;
+    const approved = rt.approvals.approveAll(req.body?.threadId, { remember: !!req.body?.remember, ttlMs });
+    return { ok: true, approved };
+  });
   r.post("/api/approvals/:id", (req) => {
-    const ok = rt.approvals.resolve(req.params.id, !!req.body.approved, req.body.response);
+    const b = req.body ?? {};
+    if (b.approved && (b.remember === "tool" || b.remember === "all")) {
+      const r2 = rt.approvals.approve(req.params.id, { response: b.response, remember: b.remember, ttlMs: b.ttlMinutes ? Number(b.ttlMinutes) * 60_000 : undefined });
+      if (!r2.ok) throw new HttpError(409, "approval is no longer pending");
+      return r2;
+    }
+    const ok = rt.approvals.resolve(req.params.id, !!b.approved, b.response);
     if (!ok) throw new HttpError(409, "approval is no longer pending");
     return { ok };
   });
+  r.get("/api/threads/:id/trust", (req) => rt.approvals.trustFor(req.params.id));
+  r.post("/api/threads/:id/trust", (req) => rt.approvals.grantTrust(req.params.id, { tool: req.body?.tool ?? null, ttlMs: req.body?.ttlMinutes ? Number(req.body.ttlMinutes) * 60_000 : undefined }));
+  r.delete("/api/threads/:id/trust", (req) => (rt.approvals.revokeAllTrust(req.params.id), { ok: true }));
+  r.delete("/api/trust/:id", (req) => (rt.approvals.revokeTrust(req.params.id), { ok: true }));
 
   // ── Governance ───────────────────────────────────────────────────────────
   r.get("/api/policy", () => rt.policy);

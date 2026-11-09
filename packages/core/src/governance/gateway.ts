@@ -77,7 +77,12 @@ export class Gateway {
       return { content: `Refused by policy: ${ruleText}. Do not retry this action another way; tell the user what was blocked.`, isError: true };
     }
 
-    if (d.decision === "approve") {
+    // "Approve all" for this conversation: skip the ask (deny rules above already had their say).
+    const trust = d.decision === "approve" ? rt.approvals.trusted(ctx.trustThreadId ?? ctx.threadId, name) : undefined;
+    if (trust) {
+      ctx.emit({ type: "CUSTOM", name: "approval_auto", value: { tool: name, trustId: trust.id, scope: trust.tool ? "tool" : "all" } });
+    }
+    if (d.decision === "approve" && !trust) {
       const reason = d.label?.description ?? `Rule requires approval: ${d.rule}`;
       const { id, outcome } = rt.approvals.request(
         { kind: "approval", runId: ctx.runId, threadId: ctx.threadId, coworkerId: coworker.id, tool: name, args, reason },
@@ -105,7 +110,7 @@ export class Gateway {
         result.content = result.content.slice(0, MAX_RESULT_CHARS) + `\n…[truncated ${result.content.length - MAX_RESULT_CHARS} chars]`;
       }
       audit({
-        decision: d.decision === "approve" ? "approved" : d.wouldBe !== d.decision ? `allow (dry-run: would ${d.wouldBe})` : "allow",
+        decision: trust ? "approved (trusted)" : d.decision === "approve" ? "approved" : d.wouldBe !== d.decision ? `allow (dry-run: would ${d.wouldBe})` : "allow",
         rule: d.rule, mode: d.mode, effect, context: contextForAudit,
         outcome: result.isError ? "error" : "ok", summary: result.content.slice(0, 280),
       });

@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { accessSync, chmodSync, constants, existsSync } from "node:fs";
 import { createRequire } from "node:module";
 import { posix, win32 } from "node:path";
 import { homedir } from "node:os";
@@ -31,6 +31,8 @@ export type ResolveEnv = {
   execPath: string;
   home: string;
   exists: (p: string) => boolean;
+  /** Make a file executable if it isn't (POSIX). Returns whether it is executable now. */
+  ensureExecutable?: (p: string) => boolean;
   /** Resolve agent-cu/package.json from local node_modules, if installed there. */
   localPackage: () => string | undefined;
 };
@@ -76,7 +78,12 @@ function globalNodeModules(e: ResolveEnv): string[] {
 function fromPackageDir(pkg: string, e: ResolveEnv, source: string): DriverCommand | undefined {
   const { join } = P(e);
   const bin = PLATFORM_BINARY[`${e.platform}-${e.arch}`];
-  if (bin && e.exists(join(pkg, "bin", bin))) return { file: join(pkg, "bin", bin), prefixArgs: [], source: `${source} (native binary)` };
+  if (bin && e.exists(join(pkg, "bin", bin))) {
+    const file = join(pkg, "bin", bin);
+    // npm does not always keep the executable bit on bundled binaries (→ EACCES). Fix it in place;
+    // if we can't, fall through to the package's node launcher instead of failing every call.
+    if (e.platform === "win32" || (e.ensureExecutable ?? ensureExecutable)(file)) return { file, prefixArgs: [], source: `${source} (native binary)` };
+  }
   const launcher = join(pkg, "bin", "agent-cu.js");
   if (e.exists(launcher)) return { file: e.execPath, prefixArgs: [launcher], source: `${source} (node launcher)` };
   return undefined;
@@ -129,4 +136,19 @@ export function resolveDriver(e: ResolveEnv = defaultResolveEnv()): DriverComman
     return { file: p, prefixArgs: [], source: "PATH" };
   }
   return undefined;
+}
+
+export function ensureExecutable(file: string): boolean {
+  try {
+    accessSync(file, constants.X_OK);
+    return true;
+  } catch {
+    try {
+      chmodSync(file, 0o755);
+      accessSync(file, constants.X_OK);
+      return true;
+    } catch {
+      return false;
+    }
+  }
 }

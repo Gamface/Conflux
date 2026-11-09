@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
 import { resolveDriver, type DriverCommand } from "./driver.ts";
+import { isNavigationKey } from "./browser.ts";
 import type { Tool, ToolContext } from "../tools/types.ts";
 import { SnapshotCache } from "./snapshot.ts";
 
@@ -110,7 +111,7 @@ export const desktopTools: Tool[] = [
   {
     name: "desktop_key",
     toolset: "computer",
-    effect: "write",
+    effect: (a) => (isNavigationKey(a?.combo) ? "read" : "write"),
     available,
     description: "Press a key or combo in an app (e.g. cmd+k, enter, escape).",
     parameters: { type: "object", properties: { combo: { type: "string" }, app: { type: "string" } }, required: ["combo", "app"] },

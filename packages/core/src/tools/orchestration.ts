@@ -53,8 +53,9 @@ export const delegateTool: Tool = {
           grants: names,
           signal: ctx.signal,
           onWaiting: ctx.onWaiting,
+          trustThreadId: ctx.trustThreadId ?? ctx.threadId,
           emit: (e) => {
-            if (e.type === "CUSTOM" && (e.name === "approval_requested" || e.name === "approval_resolved")) ctx.emit(e);
+            if (e.type === "CUSTOM" && (e.name === "approval_requested" || e.name === "approval_resolved" || e.name === "approval_auto")) ctx.emit(e);
             if (e.type === "TOOL_CALL_START") ctx.emit({ type: "CUSTOM", name: "subagent_progress", value: { index: i, tool: e.toolCallName } });
           },
         });

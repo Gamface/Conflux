@@ -42,6 +42,12 @@ export function Chat({ coworker, threadId, onThread, busEvent, onOpenComputer, o
   const [runId, setRunId] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
   const [showComputer, setShowComputer] = useState(false);
+  const [trust, setTrust] = useState<{ id: string; tool: string | null; expires_at: number | null }[]>([]);
+  const autoApproveNext = useRef(false);
+  const refreshTrust = useCallback((tid?: string) => {
+    if (tid) api(`/api/threads/${tid}/trust`).then(setTrust).catch(() => {});
+    else setTrust([]);
+  }, []);
   const abortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const threadRef = useRef<string | undefined>(threadId);
@@ -57,6 +63,7 @@ export function Chat({ coworker, threadId, onThread, busEvent, onOpenComputer, o
     if (!threadId) {
       setItems([]);
       setPlan([]);
+      setTrust([]);
       return;
     }
     if (running) return;
@@ -64,6 +71,7 @@ export function Chat({ coworker, threadId, onThread, busEvent, onOpenComputer, o
       .then((d) => {
         setItems(fromHistory(d.messages, d.approvals));
         setPlan(d.plan ?? []);
+        setTrust(d.trust ?? []);
       })
       .catch(() => onThread(undefined));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -78,16 +86,19 @@ export function Chat({ coworker, threadId, onThread, busEvent, onOpenComputer, o
     setItems((prev) => reduce(prev, e));
     if (e.type === "STATE_SNAPSHOT" && e.snapshot?.plan) setPlan(e.snapshot.plan);
     if (e.type === "RUN_STARTED") setRunId(e.runId);
-  }, []);
+    // Trust can change when an approval is answered ("Allow everything") — re-check rather than rely on catching one event.
+    if ((e.type === "CUSTOM" && (e.name === "approval_resolved" || e.name === "approval_auto")) || e.type === "RUN_FINISHED") refreshTrust(threadRef.current);
+  }, [refreshTrust]);
 
   // Background work (scheduled runs, tasks) streams into its conversation via the event bus.
   useEffect(() => {
+    if (busEvent?.channel === "approvals" && busEvent.event.type?.startsWith("trust_") && busEvent.event.threadId === threadRef.current) refreshTrust(threadRef.current);
     if (!busEvent || running) return;
     if (busEvent.channel === `thread:${threadRef.current}`) apply(busEvent.event);
     if (busEvent.channel === "learning" && busEvent.event.threadId === threadRef.current && busEvent.event.saved) {
       setItems((p) => [...p, { kind: "notice", id: nid(), tone: "ok", text: `🧠 Learned — ${busEvent.event.saved.join("; ")}` }]);
     }
-  }, [busEvent, running, apply]);
+  }, [busEvent, running, apply, refreshTrust]);
 
   const send = useCallback(
     async (text: string) => {
@@ -103,6 +114,10 @@ export function Chat({ coworker, threadId, onThread, busEvent, onOpenComputer, o
             tid = e.threadId;
             threadRef.current = tid;
             onThread(tid);
+            if (autoApproveNext.current) {
+              autoApproveNext.current = false;
+              api("/api/approvals/approve-all", { body: { threadId: tid, remember: true } }).then(() => refreshTrust(tid));
+            }
           }
           apply(e);
         }, ac.signal);
@@ -141,6 +156,21 @@ export function Chat({ coworker, threadId, onThread, busEvent, onOpenComputer, o
     setItems((p) => [...p, { kind: "notice", id: nid(), tone: "info", text: "Stopped." }]);
   };
 
+  const autoAll = trust.some((t) => t.tool === null);
+  const pendingCount = items.filter((i) => i.kind === "approval" && i.status === "pending").length;
+  const [, force] = useState(0);
+  const toggleAuto = async () => {
+    if (!threadId) {
+      // New chat: arm it; it's granted as soon as the conversation exists.
+      autoApproveNext.current = !autoApproveNext.current;
+      force((x) => x + 1);
+      return;
+    }
+    if (autoAll) await api(`/api/threads/${threadId}/trust`, { method: "DELETE" });
+    else await api("/api/approvals/approve-all", { body: { threadId, remember: true } });
+    refreshTrust(threadId);
+  };
+
   const hasBrowser = (coworker.tools ?? []).some((t) => t === "*" || t.includes("browser") || t === "toolset:computer");
 
   return (
@@ -169,6 +199,9 @@ export function Chat({ coworker, threadId, onThread, busEvent, onOpenComputer, o
           </div>
           {coworker.agui ? <Pill tone="accent">AG-UI agent</Pill> : <ModelPicker coworker={coworker} onChange={onCoworkerChange} />}
           <Pill>{coworker.toolCount ?? 0} tools</Pill>
+          <Button small kind={autoAll || autoApproveNext.current ? "primary" : "default"} onClick={toggleAuto} title="Approve every action in this conversation without asking. Never rules on the Boundaries page still apply, and everything is recorded in the audit trail.">
+            {autoAll || autoApproveNext.current ? "⚡ Auto-approve on" : "Auto-approve"}
+          </Button>
           {hasBrowser && (
             <Button small kind={showComputer ? "primary" : "default"} onClick={() => (setShowComputer(!showComputer), onOpenComputer?.())}>🖥 Computer</Button>
           )}
@@ -195,6 +228,19 @@ export function Chat({ coworker, threadId, onThread, busEvent, onOpenComputer, o
           )}
         </div>
 
+        {(trust.length > 0 || pendingCount > 1) && (
+          <div className="trust-bar">
+            {trust.length > 0 && (
+              <span className="grow">
+                ⚡ Approving without asking in this chat: <b>{autoAll ? "every action" : trust.map((t) => t.tool).join(", ")}</b>
+                <span className="muted"> · Never rules still apply · all actions are audited</span>
+              </span>
+            )}
+            {trust.length === 0 && <span className="grow muted small">{pendingCount} actions are waiting for approval.</span>}
+            {pendingCount > 1 && <Button small kind="primary" onClick={() => api("/api/approvals/approve-all", { body: { threadId } })}>Approve all ({pendingCount})</Button>}
+            {trust.length > 0 && <Button small onClick={() => api(`/api/threads/${threadId}/trust`, { method: "DELETE" }).then(() => refreshTrust(threadId))}>Stop auto-approving</Button>}
+          </div>
+        )}
         {queue.length > 0 && (
           <div className="queue">
             <span className="muted small">Queued:</span>

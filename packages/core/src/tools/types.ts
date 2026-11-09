@@ -27,6 +27,8 @@ export type ToolContext = {
   rt: Runtime;
   /** Delegation depth; subagents cannot recurse forever. */
   depth: number;
+  /** Conversation whose "approve all" grants apply (a subagent inherits its parent's). */
+  trustThreadId?: string;
   /** Called while the run is blocked on a human (approval or clarifying question). */
   onWaiting?: (waiting: boolean) => void;
 };

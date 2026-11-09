@@ -365,3 +365,6 @@ details > summary::-webkit-details-marker { display: none; }
 .next-steps { display: flex; flex-direction: column; gap: 6px; border-top: 1px solid var(--border); padding-top: 10px; }
 .builder-bar { position: sticky; bottom: 0; display: flex; gap: 12px; align-items: center; background: var(--bg); border-top: 1px solid var(--border); padding: 10px 0; z-index: 2; }
 @media (max-width: 1250px) { .builder-main { grid-template-columns: 1fr; } .palette { position: static; display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); } .palette .panel-title, .palette > .muted { grid-column: 1 / -1; } }
+
+.trust-bar { display: flex; gap: 10px; align-items: center; width: min(780px, calc(100% - 48px)); margin: 0 auto 8px; padding: 8px 12px; border-radius: 10px; background: var(--warn-soft); font-size: 13px; }
+.approve-more { border-top: 1px dashed var(--border); padding-top: 8px; }

@@ -77,6 +77,16 @@ CREATE TABLE IF NOT EXISTS approvals (
   resolved_at INTEGER
 );
 
+CREATE TABLE IF NOT EXISTS trust (
+  id TEXT PRIMARY KEY,
+  thread_id TEXT NOT NULL,
+  coworker_id TEXT,
+  tool TEXT,
+  created_at INTEGER NOT NULL,
+  expires_at INTEGER
+);
+CREATE INDEX IF NOT EXISTS trust_thread ON trust(thread_id);
+
 CREATE TABLE IF NOT EXISTS tasks (
   id TEXT PRIMARY KEY,
   thread_id TEXT NOT NULL,

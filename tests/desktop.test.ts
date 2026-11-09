@@ -9,7 +9,7 @@ import { makeRuntime, ctxFor } from "./helpers.ts";
 
 function fakeEnv(files: string[], over: Partial<ResolveEnv> = {}): ResolveEnv {
   const set = new Set(files);
-  return { platform: "win32", arch: "x64", env: {}, execPath: "C:/node/node.exe", home: "C:/Users/a", exists: (p) => set.has(p), localPackage: () => undefined, ...over };
+  return { platform: "win32", arch: "x64", env: {}, execPath: "C:/node/node.exe", home: "C:/Users/a", exists: (p) => set.has(p), ensureExecutable: () => true, localPackage: () => undefined, ...over };
 }
 
 test("driver: Windows npm global install resolves past the .cmd shim to the bundled .exe", () => {

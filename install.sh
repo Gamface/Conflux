@@ -71,6 +71,7 @@ fi
 if [ "$DESKTOP" = 1 ]; then
   step "Installing agent-cu for desktop control (local, no sudo)"
   npm install --no-save --no-audit --no-fund agent-cu || warn "agent-cu install failed; desktop tools will be unavailable."
+  chmod +x node_modules/agent-cu/bin/agent-computer-use-* 2>/dev/null || true
   if [ "$(uname)" = "Linux" ]; then
     command -v busctl >/dev/null 2>&1 && busctl --user list 2>/dev/null | grep -q org.a11y.Bus \
       && ok "Accessibility bus (AT-SPI) is running" \
